@@ -4,7 +4,8 @@ import java.util.regex.Pattern;
 
 /**
  * JavaLens Pro - One-Click Auto-Fixer & Line Diff Engine
- * Repairs common syntax, import, string comparison, loop bound, and threading errors safely.
+ * Repairs syntax, import, string comparison, floating-point ==, boxed wrapper ==,
+ * loop bound, and threading errors safely.
  */
 public class AutoFixer {
 
@@ -20,12 +21,32 @@ public class AutoFixer {
         }
     }
 
+    private static final Pattern FLOAT_VAR_DECL = Pattern.compile("\\b(?:double|float)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b");
+    private static final Pattern WRAPPER_VAR_DECL = Pattern.compile("\\b(?:Integer|Long|Double|Float|Short|Character|Boolean)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b");
+    private static final Pattern WRAPPER_LIST_DECL = Pattern.compile("\\b(?:List|ArrayList|LinkedList|Vector|Collection)\\s*<\\s*(?:Integer|Long|Double|Float|Short|String|Boolean)\\s*>\\s+([A-Za-z_][A-Za-z0-9_]*)\\b");
+    private static final Pattern DECIMAL_LIT = Pattern.compile("^\\d+\\.\\d+[fFdD]?$");
+    private static final Pattern EQ_OP = Pattern.compile(
+            "([A-Za-z_][A-Za-z0-9_.]*(?:\\([^()=!]*\\))?|\\d+\\.\\d+[fFdD]?)\\s*(==|!=)\\s*([A-Za-z_][A-Za-z0-9_.]*(?:\\([^()=!]*\\))?|\\d+\\.\\d+[fFdD]?)");
+
     public FixResult autoFix(String originalCode) {
         List<String> applied = new ArrayList<>();
         String code = originalCode;
 
+        // Collect semantic type info for safe auto-fixing
+        Set<String> floatVars = new HashSet<>();
+        Set<String> wrapperVars = new HashSet<>();
+        Set<String> wrapperLists = new HashSet<>();
+        Matcher mf = FLOAT_VAR_DECL.matcher(code);
+        while (mf.find()) floatVars.add(mf.group(1));
+        Matcher mw = WRAPPER_VAR_DECL.matcher(code);
+        while (mw.find()) wrapperVars.add(mw.group(1));
+        Matcher ml = WRAPPER_LIST_DECL.matcher(code);
+        while (ml.find()) wrapperLists.add(ml.group(1));
+
+        boolean addedObjectsUsage = false;
+
         // 1. Add missing import java.util.*; if needed
-        boolean usesUtil = Pattern.compile("\\b(Scanner|ArrayList|HashMap|Arrays|Collections|LinkedList)\\b")
+        boolean usesUtil = Pattern.compile("\\b(Scanner|ArrayList|HashMap|HashSet|LinkedHashSet|Arrays|Collections|LinkedList|List|Map|Set|Objects)\\b")
                 .matcher(code).find();
         if (usesUtil && !code.contains("import java.util.")) {
             code = "import java.util.*;\n" + code;
@@ -63,21 +84,62 @@ public class AutoFixer {
                 applied.add("Line " + (i + 1) + ": Replaced '!=' with '!.equals()' for String comparison.");
             }
 
-            // 4. Fix <= arr.length -> < arr.length
-            Matcher bound = Pattern.compile("<=\\s*([A-Za-z_][A-Za-z0-9_]*\\.length)\\b").matcher(updated);
-            if (bound.find()) {
-                updated = bound.replaceAll("< $1");
-                applied.add("Line " + (i + 1) + ": Fixed off-by-one loop bound '<= length' -> '< length'.");
+            // 4. Fix floating-point == / != and boxed wrapper == / !=
+            Matcher meq = EQ_OP.matcher(updated);
+            StringBuffer sb = new StringBuffer();
+            boolean lineChangedSemantic = false;
+            while (meq.find()) {
+                String lhs = meq.group(1).trim();
+                String op = meq.group(2).trim();
+                String rhs = meq.group(3).trim();
+                if ("null".equals(lhs) || "null".equals(rhs)) {
+                    meq.appendReplacement(sb, Matcher.quoteReplacement(meq.group(0)));
+                    continue;
+                }
+                boolean isFloatCmp = DECIMAL_LIT.matcher(lhs).matches() || DECIMAL_LIT.matcher(rhs).matches()
+                        || floatVars.contains(lhs) || floatVars.contains(rhs);
+                boolean isBoxedCmp = isBoxedExpr(lhs, wrapperVars, wrapperLists)
+                        && isBoxedExpr(rhs, wrapperVars, wrapperLists);
+
+                if (isFloatCmp) {
+                    String rep = "==".equals(op)
+                            ? "Math.abs(" + lhs + " - " + rhs + ") < 1e-9"
+                            : "Math.abs(" + lhs + " - " + rhs + ") >= 1e-9";
+                    meq.appendReplacement(sb, Matcher.quoteReplacement(rep));
+                    applied.add("Line " + (i + 1) + ": Replaced floating-point '" + op + "' with epsilon tolerance Math.abs(...) < 1e-9.");
+                    lineChangedSemantic = true;
+                } else if (isBoxedCmp) {
+                    String rep = "==".equals(op)
+                            ? "Objects.equals(" + lhs + ", " + rhs + ")"
+                            : "!Objects.equals(" + lhs + ", " + rhs + ")";
+                    meq.appendReplacement(sb, Matcher.quoteReplacement(rep));
+                    applied.add("Line " + (i + 1) + ": Replaced boxed wrapper '" + op + "' with Objects.equals(...) to avoid Integer cache bugs.");
+                    lineChangedSemantic = true;
+                    addedObjectsUsage = true;
+                } else {
+                    meq.appendReplacement(sb, Matcher.quoteReplacement(meq.group(0)));
+                }
+            }
+            if (lineChangedSemantic) {
+                meq.appendTail(sb);
+                updated = sb.toString();
             }
 
-            // 5. Fix accidental semicolon after for/while/if
-            Matcher semi = Pattern.compile("(\\b(?:for|while|if)\\s*\\([^)]*\\))\\s*;").matcher(updated);
+            // 5. Fix <= arr.length or <= list.size() -> < ...
+            Matcher bound = Pattern.compile("<=\\s*([A-Za-z_][A-Za-z0-9_]*\\.(?:length|size\\s*\\(\\s*\\)))").matcher(updated);
+            if (bound.find()) {
+                updated = bound.replaceAll("< $1");
+                applied.add("Line " + (i + 1) + ": Fixed off-by-one loop bound '<=' -> '<'.");
+            }
+
+            // 6. Fix accidental semicolon after for/while/if
+            Matcher semi = Pattern.compile("(\\b(?:for|while|if)\\s*\\([^()=!]*\\))\\s*;").matcher(updated);
             if (semi.find()) {
                 updated = semi.replaceAll("$1");
                 applied.add("Line " + (i + 1) + ": Removed accidental ';' after loop/if header.");
             }
 
-            // 6. Fix Thread.run() -> Thread.start()
+            // 7. Fix Thread.run() -> Thread.start()
             if (code.contains("extends Thread") || code.contains("new Thread")) {
                 Matcher runCall = Pattern.compile("\\b([A-Za-z_][A-Za-z0-9_]*)\\.run\\s*\\(\\s*\\)\\s*;").matcher(updated);
                 if (runCall.find()) {
@@ -86,7 +148,7 @@ public class AutoFixer {
                 }
             }
 
-            // 7. Add missing semicolon on simple System.out / return statements
+            // 8. Add missing semicolon on simple System.out / return statements
             String trimCheck = updated.trim();
             if ((trimCheck.startsWith("System.out.print") || trimCheck.startsWith("return "))
                     && !trimCheck.endsWith(";") && !trimCheck.endsWith("{") && !trimCheck.endsWith("}")) {
@@ -98,8 +160,23 @@ public class AutoFixer {
         }
 
         String fixed = String.join("\n", lines);
+        if (addedObjectsUsage && !fixed.contains("import java.util.")) {
+            fixed = "import java.util.*;\n" + fixed;
+            applied.add("Added 'import java.util.*;' for Objects.equals().");
+        }
+
         List<String> diff = buildLineDiff(originalCode, fixed);
         return new FixResult(fixed, applied, diff);
+    }
+
+    private static boolean isBoxedExpr(String expr, Set<String> wrapperVars, Set<String> wrapperLists) {
+        if (wrapperVars.contains(expr)) return true;
+        int dotGet = expr.indexOf(".get(");
+        if (dotGet > 0) {
+            String colName = expr.substring(0, dotGet).trim();
+            if (wrapperLists.contains(colName)) return true;
+        }
+        return false;
     }
 
     private List<String> buildLineDiff(String before, String after) {

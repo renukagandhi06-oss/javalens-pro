@@ -6,9 +6,10 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JavaLens Pro - Live Output Terminal & Runtime Crash Explainer
+ * JavaLens Pro - Live Output Terminal, Interactive Stdin & Runtime Crash Explainer
  * Compiles user Java code to a temp directory, executes it in a child JVM with a 5s safety timeout,
- * captures live stdout/stderr, and translates runtime exceptions into plain-English fix advice.
+ * feeds optional Program Input (stdin) to Scanner/BufferedReader, captures stdout/stderr,
+ * and translates runtime exceptions into plain-English fix advice.
  */
 public class CodeRunner {
 
@@ -32,6 +33,10 @@ public class CodeRunner {
     }
 
     public RunResult compileAndRun(String sourceCode) {
+        return compileAndRun(sourceCode, "");
+    }
+
+    public RunResult compileAndRun(String sourceCode, String stdinInput) {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
             return new RunResult(false, -1, 0, "",
@@ -59,7 +64,7 @@ public class CodeRunner {
                     err.append(String.format("  Line %d: %s%n", d.getLineNumber(), d.getMessage(Locale.ENGLISH)));
                 }
                 return new RunResult(false, 1, 0, "", err.toString(),
-                        "Use 'Auto-Fix All' or inspect the Diagnostics panel to repair syntax errors first.");
+                        "Use 'Auto-Fix All' or inspect the Fixes panel to repair syntax errors first.");
             }
 
             String javaBin = System.getProperty("java.home") + File.separator + "bin" + File.separator + "java";
@@ -67,14 +72,27 @@ public class CodeRunner {
             long start = System.currentTimeMillis();
             Process proc = pb.start();
 
+            // Feed stdin (if any) and close stream so Scanner/BufferedReader does not hang forever
+            try (OutputStream stdinOs = proc.getOutputStream()) {
+                if (stdinInput != null && !stdinInput.isEmpty()) {
+                    stdinOs.write(stdinInput.getBytes(StandardCharsets.UTF_8));
+                    if (!stdinInput.endsWith("\n")) {
+                        stdinOs.write('\n');
+                    }
+                    stdinOs.flush();
+                }
+            } catch (IOException ignored) {
+                // Child process may have exited before reading stdin
+            }
+
             boolean finished = proc.waitFor(5, TimeUnit.SECONDS);
             long elapsed = System.currentTimeMillis() - start;
 
             if (!finished) {
                 proc.destroyForcibly();
                 return new RunResult(true, -1, elapsed, readStream(proc.getInputStream()),
-                        "Execution timed out after 5 seconds (possible infinite loop or waiting for Scanner input).",
-                        "Check for infinite while/for loops or remove interactive Scanner input when testing in Run mode.");
+                        "Execution timed out after 5 seconds (possible infinite loop).",
+                        "Check for infinite while/for loops or recursion without a base case.");
             }
 
             String out = readStream(proc.getInputStream());
@@ -92,8 +110,17 @@ public class CodeRunner {
 
     private static String diagnoseRuntimeCrash(String stderr) {
         if (stderr == null || stderr.trim().isEmpty()) return "";
+        if (stderr.contains("NoSuchElementException")) {
+            return "Runtime Fix (NoSuchElementException): Your program tried to read from Scanner/System.in, but no input was provided. Enter sample lines in the 'Program Input (stdin)' box and click Run again.";
+        }
+        if (stderr.contains("InputMismatchException")) {
+            return "Runtime Fix (InputMismatchException): Scanner received text that does not match the expected type (e.g. words when nextInt() expected a number). Check your Program Input (stdin).";
+        }
         if (stderr.contains("ArrayIndexOutOfBoundsException")) {
             return "Runtime Fix (ArrayIndexOutOfBoundsException): Your loop or index exceeded array.length - 1. Change '<= arr.length' to '< arr.length'.";
+        }
+        if (stderr.contains("ConcurrentModificationException")) {
+            return "Runtime Fix (ConcurrentModificationException): You modified a collection while looping over it with for-each. Use Iterator.remove() or removeIf().";
         }
         if (stderr.contains("NullPointerException")) {
             return "Runtime Fix (NullPointerException): You called a method or field on a null object. Initialize it first or check 'if (obj != null)'.";

@@ -8,13 +8,16 @@ import java.util.*;
 
 /**
  * JavaLens Pro - Built-in Pure Java HTTP Web Server (Standard JDK com.sun.net.httpserver)
- * Serves index.html and routes all Analyze, Auto-Fix, Metrics, and Live Run requests
- * directly to the Pure Java OOP Engine classes (CompilerEngine, StaticAnalyzer, AutoFixer, CodeRunner).
+ * Serves index.html and routes all Analyze, Auto-Fix, Big-O Complexity, Security, and Live Run
+ * requests directly to the 14-class Pure Java OOP Engine.
  */
 public class JavaLensWebServer {
 
     private final CompilerEngine compilerEngine = new CompilerEngine();
     private final StaticAnalyzer staticAnalyzer = new StaticAnalyzer();
+    private final SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer();
+    private final ComplexityAnalyzer complexityAnalyzer = new ComplexityAnalyzer();
+    private final SecurityScanner securityScanner = new SecurityScanner();
     private final AutoFixer autoFixer = new AutoFixer();
     private final CodeRunner codeRunner = new CodeRunner();
 
@@ -22,7 +25,15 @@ public class JavaLensWebServer {
         HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
 
         server.createContext("/", this::handleStaticUi);
-        server.createContext("/api/ping", ex -> sendJson(ex, 200, "{\"status\":\"ok\",\"engine\":\"JavaLens Pure Java JDK 17\"}"));
+        server.createContext("/api/ping", ex -> {
+            if ("HEAD".equalsIgnoreCase(ex.getRequestMethod())) {
+                addCors(ex);
+                ex.sendResponseHeaders(200, -1);
+                ex.close();
+                return;
+            }
+            sendJson(ex, 200, "{\"status\":\"ok\",\"engine\":\"JavaLens Pro Pure Java JDK 17 (14 OOP Classes)\"}");
+        });
         server.createContext("/api/analyze", this::handleAnalyze);
         server.createContext("/api/autofix", this::handleAutoFix);
         server.createContext("/api/run", this::handleRun);
@@ -30,13 +41,14 @@ public class JavaLensWebServer {
         server.setExecutor(null);
         server.start();
         System.out.println("============================================================");
-        System.out.println("  JavaLens Pro - Pure Java Backend Server Running!");
+        System.out.println("  JavaLens Pro - 14-Class Pure Java Backend Server Running!");
         System.out.println("  Listening on port: " + port);
         System.out.println("============================================================");
     }
 
     private void handleStaticUi(HttpExchange ex) throws IOException {
-        if ("OPTIONS".equalsIgnoreCase(ex.getRequestMethod())) {
+        String method = ex.getRequestMethod();
+        if ("OPTIONS".equalsIgnoreCase(method)) {
             sendCorsEmpty(ex);
             return;
         }
@@ -48,9 +60,14 @@ public class JavaLensWebServer {
             sendText(ex, 404, "text/plain", "index.html not found in working directory.");
             return;
         }
-        byte[] bytes = Files.readAllBytes(uiFile.toPath());
         addCors(ex);
         ex.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
+        if ("HEAD".equalsIgnoreCase(method)) {
+            ex.sendResponseHeaders(200, -1);
+            ex.close();
+            return;
+        }
+        byte[] bytes = Files.readAllBytes(uiFile.toPath());
         ex.sendResponseHeaders(200, bytes.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(bytes);
@@ -60,10 +77,17 @@ public class JavaLensWebServer {
     private void handleAnalyze(HttpExchange ex) throws IOException {
         if ("OPTIONS".equalsIgnoreCase(ex.getRequestMethod())) { sendCorsEmpty(ex); return; }
         String code = readBody(ex);
+
+        List<ComplexityAnalyzer.MethodComplexity> methodReports = complexityAnalyzer.analyzeMethods(code);
+
         List<DiagnosticItem> all = new ArrayList<>();
         all.addAll(compilerEngine.compileAndDiagnose(code));
         all.addAll(staticAnalyzer.analyze(code));
+        all.addAll(semanticAnalyzer.analyze(code));
+        all.addAll(securityScanner.scan(code));
+        all.addAll(complexityAnalyzer.toDiagnostics(methodReports));
         all.sort(Comparator.comparingInt(DiagnosticItem::getLine));
+
         CodeMetrics m = CodeMetrics.compute(code, all);
 
         StringBuilder json = new StringBuilder();
@@ -78,6 +102,21 @@ public class JavaLensWebServer {
                 .append("\"healthGrade\":\"").append(escJson(m.healthGrade)).append("\",")
                 .append("\"oopConcepts\":").append(toJsonStringArray(m.oopConcepts))
                 .append("},");
+
+        json.append("\"methodComplexity\":[");
+        for (int i = 0; i < methodReports.size(); i++) {
+            ComplexityAnalyzer.MethodComplexity mc = methodReports.get(i);
+            if (i > 0) json.append(",");
+            json.append("{")
+                    .append("\"methodName\":\"").append(escJson(mc.methodName)).append("\",")
+                    .append("\"line\":").append(mc.line).append(",")
+                    .append("\"timeComplexity\":\"").append(escJson(mc.timeComplexity)).append("\",")
+                    .append("\"spaceComplexity\":\"").append(escJson(mc.spaceComplexity)).append("\",")
+                    .append("\"refactorHint\":\"").append(escJson(mc.refactorHint)).append("\"")
+                    .append("}");
+        }
+        json.append("],");
+
         json.append("\"diagnostics\":[");
         for (int i = 0; i < all.size(); i++) {
             DiagnosticItem d = all.get(i);
@@ -112,7 +151,16 @@ public class JavaLensWebServer {
     private void handleRun(HttpExchange ex) throws IOException {
         if ("OPTIONS".equalsIgnoreCase(ex.getRequestMethod())) { sendCorsEmpty(ex); return; }
         String code = readBody(ex);
-        CodeRunner.RunResult rr = codeRunner.compileAndRun(code);
+        String stdinInput = "";
+        String encodedStdin = ex.getRequestHeaders().getFirst("X-JavaLens-Stdin");
+        if (encodedStdin != null && !encodedStdin.isEmpty()) {
+            try {
+                stdinInput = new String(Base64.getDecoder().decode(encodedStdin), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException ignored) {
+                stdinInput = "";
+            }
+        }
+        CodeRunner.RunResult rr = codeRunner.compileAndRun(code, stdinInput);
         String json = "{"
                 + "\"compiled\":" + rr.compiled + ","
                 + "\"exitCode\":" + rr.exitCode + ","
@@ -136,8 +184,8 @@ public class JavaLensWebServer {
 
     private static void addCors(HttpExchange ex) {
         ex.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+        ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, HEAD, OPTIONS");
+        ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, X-JavaLens-Stdin");
     }
 
     private static void sendCorsEmpty(HttpExchange ex) throws IOException {

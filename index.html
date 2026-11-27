@@ -99,10 +99,11 @@
       <!-- Diagnostic Workspaces + Blank Editor -->
       <div class="flex flex-wrap items-center gap-2 pt-1">
         <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-200 mr-1">Workspaces:</span>
-        <button type="button" data-preset="0" class="preset-pill px-3 py-1.5 rounded-xl bg-white text-emerald-900 text-xs font-bold shadow-sm transition">String &amp; Bounds</button>
-        <button type="button" data-preset="1" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Threads &amp; Catch</button>
-        <button type="button" data-preset="2" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Runtime Crash</button>
-        <button type="button" data-preset="3" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Clean Benchmark</button>
+        <button type="button" data-preset="0" class="preset-pill px-3 py-1.5 rounded-xl bg-white text-emerald-900 text-xs font-bold shadow-sm transition">Subtle Bugs</button>
+        <button type="button" data-preset="1" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">String &amp; Bounds</button>
+        <button type="button" data-preset="2" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Security &amp; Leaks</button>
+        <button type="button" data-preset="3" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Scanner Input</button>
+        <button type="button" data-preset="4" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Clean Benchmark</button>
         <button type="button" id="btn-blank-editor" class="px-3 py-1.5 rounded-xl bg-slate-900/50 hover:bg-slate-900/70 border border-white/20 text-white text-xs font-semibold transition">+ Blank Editor</button>
       </div>
     </section>
@@ -147,12 +148,24 @@
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
               <span id="active-class-label">StudentMarks.java</span>
             </div>
-            <span class="text-[11px] text-slate-500">Tap any issue on the right to jump to its line</span>
+            <div class="flex items-center gap-2">
+              <span class="hidden sm:inline text-[11px] text-slate-500">Tap any issue to jump to its line</span>
+              <button type="button" id="btn-copy-code" class="px-2.5 py-1 rounded-lg bg-slate-200/80 hover:bg-slate-300 text-slate-800 text-[11px] font-bold transition">Copy Code</button>
+            </div>
           </div>
           <div class="flex relative min-h-[300px] max-h-[400px] bg-slate-950 text-slate-100">
             <pre id="line-numbers" class="code-font select-none text-right px-3 py-3 text-xs leading-6 text-slate-500 bg-slate-900 border-r border-slate-800 overflow-hidden"></pre>
             <textarea id="code-editor" spellcheck="false" aria-label="Java Source Code Editor" class="code-font flex-1 bg-transparent text-slate-100 text-sm leading-6 p-3 focus:outline-none resize-none overflow-auto whitespace-pre"></textarea>
           </div>
+        </div>
+
+        <!-- Interactive Program Input (stdin) for Scanner / BufferedReader -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2">
+            <span class="text-xs font-bold text-slate-800">Program Input (stdin)</span>
+            <span class="text-[11px] text-slate-500">Optional — passed live to Scanner(System.in)</span>
+          </div>
+          <textarea id="stdin-input" rows="2" spellcheck="false" placeholder="Type sample input lines here for Scanner / BufferedReader (e.g. Girish&#10;95)..." class="code-font w-full text-xs p-3 bg-white text-slate-800 focus:outline-none resize-y"></textarea>
         </div>
 
         <!-- Live Output Terminal -->
@@ -198,7 +211,7 @@
           <div class="grid grid-cols-3 border-b border-slate-200 bg-slate-50 text-xs font-bold">
             <button type="button" data-tab="diagnostics" class="tab-btn py-2.5 px-2 text-emerald-700 border-b-2 border-emerald-600 bg-white">Fixes</button>
             <button type="button" data-tab="diff" class="tab-btn py-2.5 px-2 text-slate-500 hover:text-slate-800">Diff</button>
-            <button type="button" data-tab="metrics" class="tab-btn py-2.5 px-2 text-slate-500 hover:text-slate-800">OOP &amp; Metrics</button>
+            <button type="button" data-tab="metrics" class="tab-btn py-2.5 px-2 text-slate-500 hover:text-slate-800">Complexity &amp; OOP</button>
           </div>
 
           <div id="panel-diagnostics" class="tab-view p-3.5 space-y-2.5 overflow-y-auto max-h-[380px]"></div>
@@ -256,6 +269,50 @@
       'use strict';
 
       const PRESETS = [
+`import java.util.*;
+
+public class Utils {
+    public static List<Integer> dedup(List<Integer> nums) {
+        List<Integer> result = new ArrayList<>();
+        for (int i = 0; i < nums.size(); i++) {
+            boolean found = false;
+            for (int j = 0; j < result.size(); j++) {
+                if (nums.get(i) == result.get(j)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) result.add(nums.get(i));
+        }
+        return result;
+    }
+
+    public static int countEven(int[] arr) {
+        int count = 0;
+        for (int i = 0; i <= arr.length; i++) {
+            if (arr[i] % 2 == 0) count++;
+        }
+        return count;
+    }
+
+    public static double avg(List<Double> vals) {
+        double sum = 0;
+        for (double v : vals) sum += v;
+        return sum / vals.size();
+    }
+
+    public static void main(String[] args) {
+        List<Integer> nums = Arrays.asList(300, 300, 200, 200, 100);
+        System.out.println(dedup(nums));
+
+        int[] arr = {2, 4, 6, 8};
+        System.out.println(countEven(arr));
+
+        List<Double> vals = Arrays.asList(1.1, 2.2, 3.3);
+        double a = avg(vals);
+        System.out.println(a == 2.2);
+    }
+}`,
 `public class StudentMarks {
     public static void main(String[] args) {
         ArrayList<String> names = new ArrayList<>();
@@ -270,40 +327,50 @@
         }
     }
 }`,
-`class WorkerTask extends Thread {
-    public void run() {
-        System.out.println("Worker thread running: " + Thread.currentThread().getName());
-    }
-}
+`import java.util.*;
 
-public class ThreadDemo {
+public class AuthService {
     public static void main(String[] args) {
-        WorkerTask t1 = new WorkerTask();
-        t1.run();
-        try {
-            int x = 10 / 2;
-            System.out.println("Result: " + x);
-        } catch (Exception e) {}
+        String apiKey = "sk-live-secret-998877";
+        String userInput = "admin";
+        String sql = "SELECT * FROM users WHERE name = '" + userInput + "'";
+        Scanner sc = new Scanner(System.in);
+        double ratio = 5 / 2;
+        System.out.println("Query: " + sql + " | Ratio: " + ratio);
     }
 }`,
-`public class CrashDemo {
+`import java.util.*;
+
+public class GradeCalculator {
     public static void main(String[] args) {
-        int[] scores = {75, 85, 95};
-        System.out.println("Starting array scan...");
-        for (int i = 0; i <= scores.length; i++) {
-            System.out.println("Score " + i + ": " + scores[i]);
+        try (Scanner sc = new Scanner(System.in)) {
+            String student = sc.nextLine();
+            int score = sc.nextInt();
+            String grade = score >= 90 ? "A+" : score >= 75 ? "A" : "B";
+            System.out.println("Student: " + student);
+            System.out.println("Score: " + score + " -> Grade: " + grade);
         }
     }
 }`,
 `import java.util.*;
 
-public class CleanDemo {
+public class CleanBankAccount {
+    private final String owner;
+    private double balance;
+
+    public CleanBankAccount(String owner, double balance) {
+        this.owner = owner;
+        this.balance = balance;
+    }
+
+    public void deposit(double amount) {
+        if (amount > 0) balance += amount;
+    }
+
     public static void main(String[] args) {
-        List<String> modules = Arrays.asList("Compiler API", "Static Rules", "JVM Runner");
-        System.out.println("=== Active Engine Modules ===");
-        for (int i = 0; i < modules.size(); i++) {
-            System.out.println((i + 1) + ". " + modules.get(i));
-        }
+        CleanBankAccount acc = new CleanBankAccount("Girish", 1500.0);
+        acc.deposit(500.0);
+        System.out.println("Account ready for " + acc.owner + ": Rs." + acc.balance);
     }
 }`
       ];
@@ -376,104 +443,221 @@ public class CleanDemo {
       }
 
       function localAnalyze(code) {
-        const diags = [];
         const lines = code.split(/\r?\n/);
-        const usesUtil = /\b(Scanner|ArrayList|HashMap|Arrays|Collections|List)\b/.test(code);
-        if (usesUtil && !code.includes('import java.util.')) {
-          diags.push({ line: 1, column: 1, severity: 'ERROR', ruleId: 'JL-01', title: 'Missing java.util Import', message: 'You used a helper class like ArrayList or Scanner without importing java.util.*.', suggestion: "Add 'import java.util.*;' at Line 1 (Auto-Fix supported)." });
+        const diags = [];
+        const floatVars = new Set();
+        const intVars = new Set();
+        const wrapperVars = new Set();
+        const wrapperLists = new Set();
+
+        lines.forEach((raw) => {
+          const s = raw.split('//')[0];
+          let m;
+          const rf = /\b(?:double|float)\s+([A-Za-z_]\w*)\b/g;
+          while ((m = rf.exec(s))) floatVars.add(m[1]);
+          const ri = /\b(?:int|long|short)\s+([A-Za-z_]\w*)\b/g;
+          while ((m = ri.exec(s))) intVars.add(m[1]);
+          const rw = /\b(?:Integer|Long|Double|Float|Short|Boolean)\s+([A-Za-z_]\w*)\b/g;
+          while ((m = rw.exec(s))) wrapperVars.add(m[1]);
+          const rl = /\b(?:List|ArrayList|LinkedList)\s*<\s*(?:Integer|Long|Double|Float|String|Boolean)\s*>\s+([A-Za-z_]\w*)\b/g;
+          while ((m = rl.exec(s))) wrapperLists.add(m[1]);
+        });
+
+        const isBoxed = (expr) => {
+          if (wrapperVars.has(expr)) return true;
+          const idx = expr.indexOf('.get(');
+          return idx > 0 && wrapperLists.has(expr.slice(0, idx).trim());
+        };
+
+        if (/\b(ArrayList|Scanner|HashMap|Arrays|List)\b/.test(code) && !code.includes('import java.util.')) {
+          diags.push({ line: 1, severity: 'ERROR', category: 'COMPILER', ruleId: 'STAT-001', title: 'Missing java.util Import', message: 'You used a utility class like ArrayList, List, or Scanner without importing java.util.*.', suggestion: "Add 'import java.util.*;' at Line 1 (Auto-Fix supported)." });
         }
-        let braces = 0;
-        lines.forEach((raw, idx) => {
-          const ln = idx + 1;
-          const t = raw.replace(/\/\/.*$/, '').trim();
+
+        lines.forEach((raw, i) => {
+          const ln = i + 1;
+          const s = raw.split('//')[0];
+          const t = s.trim();
           if (!t) return;
-          for (const c of t) { if (c === '{') braces++; else if (c === '}') braces--; }
-          if (/("[^"]*"\s*(==|!=)|\b(==|!=)\s*"[^"]*")/.test(t)) {
-            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-02', title: 'Comparing Text with == Instead of .equals()', message: 'In Java, == compares memory references instead of actual text content.', suggestion: 'Replace == with .equals("...") (Auto-Fix supported).' });
+
+          if (/Systm\.|pritnln|printn\(/.test(s)) {
+            diags.push({ line: ln, severity: 'ERROR', category: 'COMPILER', ruleId: 'COMP-TYPO', title: 'Typo in System.out.println', message: 'Misspelled System.out.println causes a cannot-find-symbol compiler error.', suggestion: 'Change to System.out.println(...) (Auto-Fix supported).' });
           }
-          if (/\b(for|while|if)\s*\([^)]*\)\s*;/.test(t)) {
-            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-03', title: 'Accidental Semicolon After Loop/If', message: 'A trailing semicolon creates an empty loop or condition body.', suggestion: 'Delete the ; right after the closing ).' });
+          if (/\b[A-Za-z_]\w*\s*(==|!=)\s*"[^"]*"/.test(s)) {
+            diags.push({ line: ln, severity: 'ERROR', category: 'STATIC_ANALYSIS', ruleId: 'STAT-002', title: "String '==' Comparison Bug", message: '== compares memory addresses instead of text contents.', suggestion: 'Use str.equals("...") instead (Auto-Fix supported).' });
           }
-          if (/<=\s*[A-Za-z_][A-Za-z0-9_]*\.length\b/.test(t)) {
-            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-05', title: 'Loop Goes 1 Step Past Array End', message: 'Arrays are 0-indexed, so <= length causes ArrayIndexOutOfBoundsException.', suggestion: "Change '<=' to '<' (Auto-Fix supported)." });
+          const eqRe = /([A-Za-z_][A-Za-z0-9_.]*(?:\([^()=!]*\))?|\d+\.\d+[fFdD]?)\s*(==|!=)\s*([A-Za-z_][A-Za-z0-9_.]*(?:\([^()=!]*\))?|\d+\.\d+[fFdD]?)/g;
+          let meq;
+          while ((meq = eqRe.exec(s))) {
+            const lhs = meq[1].trim(), op = meq[2], rhs = meq[3].trim();
+            if (lhs === 'null' || rhs === 'null') continue;
+            if (/^\d+\.\d+[fFdD]?$/.test(lhs) || /^\d+\.\d+[fFdD]?$/.test(rhs) || floatVars.has(lhs) || floatVars.has(rhs)) {
+              const rep = op === '==' ? `Math.abs(${lhs} - ${rhs}) < 1e-9` : `Math.abs(${lhs} - ${rhs}) >= 1e-9`;
+              diags.push({ line: ln, severity: 'WARNING', category: 'SEMANTIC', ruleId: 'SEM-001', title: `Floating-Point Equality Trap (${op})`, message: 'IEEE 754 binary rounding makes double/float == fail (e.g. (1.1+2.2+3.3)/3 is 2.1999999999999997 != 2.2).', suggestion: `Use epsilon tolerance: ${rep} (Auto-Fix supported).` });
+            } else if (isBoxed(lhs) && isBoxed(rhs)) {
+              const rep = op === '==' ? `Objects.equals(${lhs}, ${rhs})` : `!Objects.equals(${lhs}, ${rhs})`;
+              diags.push({ line: ln, severity: 'ERROR', category: 'SEMANTIC', ruleId: 'SEM-002', title: "Boxed Wrapper '==' Identity Trap", message: 'Java only caches Integer -128..127, so 200 == 200 or 300 == 300 compares memory addresses and returns false!', suggestion: `Use value equality: ${rep} (Auto-Fix supported).` });
+            }
           }
-          if (/\b[A-Za-z_][A-Za-z0-9_]*\.run\s*\(\s*\)\s*;/.test(t) && (code.includes('extends Thread') || code.includes('new Thread'))) {
-            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-06', title: 'Called .run() Instead of .start()', message: 'Calling .run() executes on the main thread instead of starting a new thread.', suggestion: "Replace '.run()' with '.start()' (Auto-Fix supported)." });
+          const mdiv = /\b(?:double|float)\s+[A-Za-z_]\w*\s*=\s*([A-Za-z0-9_]+)\s*\/\s*([A-Za-z0-9_]+)\s*;/.exec(s);
+          if (mdiv && (/^\d+$/.test(mdiv[1]) || intVars.has(mdiv[1])) && (/^\d+$/.test(mdiv[2]) || intVars.has(mdiv[2]))) {
+            diags.push({ line: ln, severity: 'WARNING', category: 'SEMANTIC', ruleId: 'SEM-003', title: 'Integer Division Truncation', message: `Dividing two integers (${mdiv[1]} / ${mdiv[2]}) drops the decimal part before assigning to double.`, suggestion: `Cast one operand: (double) ${mdiv[1]} / ${mdiv[2]}.` });
           }
-          if (/[/%]\s*0(?![0-9.])/.test(t)) {
-            diags.push({ line: ln, column: 1, severity: 'ERROR', ruleId: 'JL-07', title: 'Division by Zero', message: 'Dividing an integer by 0 throws ArithmeticException at runtime.', suggestion: 'Check that the divisor is non-zero before dividing.' });
+          const msz = /\/\s*([A-Za-z_]\w*)\.(size\s*\(\s*\)|length\b)/.exec(s);
+          if (msz) {
+            const col = msz[1];
+            const prev = lines.slice(Math.max(0, i - 6), i + 1).join('\n');
+            if (!prev.includes(col + '.isEmpty()') && !prev.includes(col + '.size() == 0') && !prev.includes(col + '.length == 0')) {
+              diags.push({ line: ln, severity: 'WARNING', category: 'SEMANTIC', ruleId: 'SEM-005', title: 'Unchecked Empty Collection Division', message: `Dividing by ${col}.${msz[2]} without checking empty causes NaN or ArithmeticException.`, suggestion: `Guard first: if (${col}.isEmpty()) return 0.0;` });
+            }
           }
-          if (/\bcatch\s*\([^)]*\)\s*\{\s*\}/.test(t)) {
-            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-08', title: 'Empty Catch Block Hides Errors', message: 'An empty catch block silently swallows runtime exceptions.', suggestion: 'Log the error inside catch: System.err.println(e.getMessage());' });
+          if (/<=\s*[A-Za-z_]\w*\.(?:length|size\s*\(\s*\))/.test(s)) {
+            diags.push({ line: ln, severity: 'ERROR', category: 'STATIC_ANALYSIS', ruleId: 'STAT-005', title: 'Off-by-One Loop Bound (<=)', message: 'Loops using <= length or <= size() step past the last index and crash.', suggestion: 'Change <= to < (Auto-Fix supported).' });
           }
-          if (t.includes('Systm.') || t.includes('pritnln') || t.includes('printn(')) {
-            diags.push({ line: ln, column: 1, severity: 'ERROR', ruleId: 'JL-09', title: 'Typo in System.out.println', message: 'Detected misspelled console print statement.', suggestion: "Fix spelling to 'System.out.println(...)'." });
+          if (/"[^"]*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^"]*"\s*\+\s*[A-Za-z_]\w*/i.test(s)) {
+            diags.push({ line: ln, severity: 'ERROR', category: 'SECURITY', ruleId: 'SEC-001', title: 'SQL Injection Vulnerability', message: 'Concatenating variables directly into SQL strings allows SQL injection.', suggestion: 'Use PreparedStatement with ? placeholders.' });
           }
-          if ((t.startsWith('System.out.print') || t.startsWith('Systm.out.') || t.startsWith('return ')) && !t.endsWith(';') && !t.endsWith('{') && !t.endsWith('}')) {
-            diags.push({ line: ln, column: raw.length, severity: 'ERROR', ruleId: 'JAVAC', title: 'Missing Semicolon (;)', message: 'Every Java statement must end with a semicolon.', suggestion: "Add ';' at the end of Line " + ln + '.' });
+          if (/\bString\s+[A-Za-z0-9_]*(?:password|secret|apiKey|token)[A-Za-z0-9_]*\s*=\s*"[^"]{3,}"/i.test(s)) {
+            diags.push({ line: ln, severity: 'WARNING', category: 'SECURITY', ruleId: 'SEC-002', title: 'Hardcoded Secret or Credential', message: 'Hardcoding API keys or passwords in source code exposes them in Git.', suggestion: 'Read secrets from System.getenv("API_KEY") instead.' });
           }
-          if (/new\s+String\s*\(\s*"[^"]*"\s*\)/.test(t)) {
-            diags.push({ line: ln, column: 1, severity: 'INFO', ruleId: 'JL-11', title: 'Redundant new String()', message: 'Allocates an extra heap object instead of reusing the String pool.', suggestion: 'Assign the string literal directly.' });
+          const mres = /\b(Scanner|FileReader|BufferedReader)\s+([A-Za-z_]\w*)\s*=\s*new\s+/.exec(s);
+          if (mres && !t.startsWith('try') && !s.includes('try (') && !code.includes(mres[2] + '.close()')) {
+            diags.push({ line: ln, severity: 'WARNING', category: 'SECURITY', ruleId: 'SEC-003', title: `Unclosed Resource Leak (${mres[1]})`, message: `${mres[2]} is opened without .close() or try-with-resources.`, suggestion: `Wrap in try (${mres[1]} ${mres[2]} = new ...) { ... }.` });
+          }
+          if ((t.startsWith('System.out.print') || t.startsWith('Systm.out.')) && !t.endsWith(';') && !t.endsWith('{')) {
+            diags.push({ line: ln, severity: 'ERROR', category: 'COMPILER', ruleId: 'COMP-SEMI', title: 'Missing Semicolon (;)', message: 'Statement is missing its ending semicolon.', suggestion: 'Add ; at the end of this line (Auto-Fix supported).' });
           }
         });
-        if (braces !== 0) {
-          diags.push({ line: lines.length, column: 1, severity: 'ERROR', ruleId: 'JL-14', title: 'Unmatched Curly Braces {}', message: 'Opening { and closing } counts do not match.', suggestion: 'Match every { with a closing }.' });
+
+        const methodComplexity = [];
+        const mhRe = /^\s*(?:(?:public|private|protected|static|final)\s+)+[A-Za-z0-9_<>,\[\]\s]+\s+([A-Za-z_]\w*)\s*\([^)]*\)/;
+        for (let i = 0; i < lines.length; i++) {
+          const mh = mhRe.exec(lines[i]);
+          if (!mh || ['if', 'for', 'while', 'switch', 'catch'].includes(mh[1])) continue;
+          const mName = mh[1];
+          const startLine = i + 1;
+          let depth = 0, entered = false, loopDepth = 0, maxLoop = 0, hasAlloc = false, hasFound = false;
+          const targets = [];
+          for (let j = i; j < lines.length; j++) {
+            const cur = lines[j].split('//')[0];
+            if (j > i && entered) {
+              if (/\b(for|while)\s*\(/.test(cur)) {
+                loopDepth++;
+                if (loopDepth > maxLoop) maxLoop = loopDepth;
+                if (cur.includes('{')) targets.push(depth + 1); else loopDepth--;
+              }
+              if (/\bnew\s+(?:ArrayList|HashMap|HashSet|int|double|String)/.test(cur)) hasAlloc = true;
+              if (cur.includes('found = true') || cur.includes('.contains(')) hasFound = true;
+            }
+            for (const ch of cur) {
+              if (ch === '{') { depth++; entered = true; }
+              else if (ch === '}') {
+                depth--;
+                while (targets.length && depth < targets[targets.length - 1]) { targets.pop(); loopDepth = Math.max(0, loopDepth - 1); }
+              }
+            }
+            if (entered && depth === 0) { i = j; break; }
+          }
+          const time = maxLoop >= 3 ? 'O(n^3)' : maxLoop === 2 ? 'O(n^2)' : maxLoop === 1 ? 'O(n)' : 'O(1)';
+          const space = hasAlloc ? 'O(n)' : 'O(1)';
+          const hint = time === 'O(n^2)'
+            ? (hasFound ? 'O(n^2) nested lookup detected: use a HashSet or LinkedHashSet to optimize to O(n).' : 'Quadratic O(n^2) nested loop: consider a HashMap/HashSet lookup.')
+            : 'Optimal structure - no algorithmic bottleneck detected.';
+          methodComplexity.push({ methodName: mName, line: startLine, timeComplexity: time, spaceComplexity: space, refactorHint: hint });
+          if (time === 'O(n^2)' || time === 'O(n^3)') {
+            diags.push({ line: startLine, severity: 'INFO', category: 'PERFORMANCE', ruleId: 'PERF-001', title: `Algorithmic Complexity: ${mName}() is ${time}`, message: `Estimated Time ${time}, Space ${space}.`, suggestion: hint });
+          }
         }
 
-        const decisions = (code.match(/\b(if|for|while|case|catch)\b|&&|\|\||\?/g) || []).length;
-        const complexity = 1 + decisions;
-        const errors = diags.filter((d) => d.severity === 'ERROR').length;
-        const warnings = diags.filter((d) => d.severity === 'WARNING').length;
-        const score = Math.max(0, Math.min(100, 100 - errors * 22 - warnings * 8 - Math.max(0, (complexity - 10) * 2)));
-        const grade = score >= 95 ? 'A+' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D';
+        const errCount = diags.filter((d) => d.severity === 'ERROR').length;
+        const warnCount = diags.filter((d) => d.severity === 'WARNING').length;
+        const score = Math.max(0, Math.min(100, 100 - errCount * 22 - warnCount * 8));
+        const grade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D';
         const oop = [];
-        if (code.includes('private ')) oop.push('Encapsulation');
-        if (code.includes('extends ')) oop.push('Inheritance');
-        if (code.includes('implements ')) oop.push('Interfaces');
-        if (code.includes('try') && code.includes('catch')) oop.push('Exception Handling');
-        if (code.includes('Thread') || code.includes('Runnable')) oop.push('Multithreading');
-        if (/\b(ArrayList|HashMap|List|Map)\b/.test(code)) oop.push('Java Collections');
-        if (oop.length === 0) oop.push('Basic Class Structure');
+        if (/\bclass\s+\w+/.test(code)) oop.push('Class & Objects');
+        if (/\bprivate\s+/.test(code)) oop.push('Encapsulation');
+        if (/\bextends\s+/.test(code)) oop.push('Inheritance');
+        if (/\btry\s*\(/.test(code)) oop.push('Try-With-Resources');
+        if (/\bList<|ArrayList|HashMap|HashSet/.test(code)) oop.push('Collections Framework');
+        if (!oop.length) oop.push('Basic Procedural Java');
 
         return {
-          diagnostics: diags,
-          metrics: { totalLines: lines.length, codeLines: lines.filter((l) => l.trim()).length, classCount: (code.match(/\bclass\s+/g) || []).length, methodCount: (code.match(/\b(public|private|static)\s+[\w<>\[\]]+\s+[a-z]\w*\s*\(/g) || []).length, complexity, healthScore: score, healthGrade: grade, oopConcepts: oop }
+          metrics: {
+            totalLines: lines.length,
+            codeLines: lines.filter((l) => l.trim()).length,
+            classCount: (code.match(/\bclass\s+\w+/g) || []).length || 1,
+            methodCount: methodComplexity.length || 1,
+            complexity: 1 + (code.match(/\b(if|for|while|catch|case)\b/g) || []).length,
+            healthScore: score,
+            healthGrade: grade,
+            oopConcepts: oop
+          },
+          methodComplexity,
+          diagnostics: diags
         };
       }
 
       function localAutoFix(original) {
-        let code = original;
         const applied = [];
-        if (/\b(Scanner|ArrayList|HashMap|Arrays|List)\b/.test(code) && !code.includes('import java.util.')) {
-          code = 'import java.util.*;\n' + code;
-          applied.push("Added missing 'import java.util.*;' at Line 1.");
+        let fixed = original;
+        const floatVars = new Set();
+        const wrapperVars = new Set();
+        const wrapperLists = new Set();
+        let m;
+        const rf = /\b(?:double|float)\s+([A-Za-z_]\w*)\b/g;
+        while ((m = rf.exec(original))) floatVars.add(m[1]);
+        const rw = /\b(?:Integer|Long|Double|Float|Short|Boolean)\s+([A-Za-z_]\w*)\b/g;
+        while ((m = rw.exec(original))) wrapperVars.add(m[1]);
+        const rl = /\b(?:List|ArrayList|LinkedList)\s*<\s*(?:Integer|Long|Double|Float|String|Boolean)\s*>\s+([A-Za-z_]\w*)\b/g;
+        while ((m = rl.exec(original))) wrapperLists.add(m[1]);
+        const isBoxed = (expr) => wrapperVars.has(expr) || (expr.indexOf('.get(') > 0 && wrapperLists.has(expr.slice(0, expr.indexOf('.get(')).trim()));
+
+        if (/\b(ArrayList|Scanner|HashMap|Arrays|List)\b/.test(fixed) && !fixed.includes('import java.util.')) {
+          fixed = 'import java.util.*;\n' + fixed;
+          applied.push("Added missing 'import java.util.*;'");
         }
-        const lines = code.split(/\r?\n/).map((line, i) => {
+        const lines = fixed.split(/\r?\n/).map((line, i) => {
           let u = line;
-          if (u.includes('Systm.')) { u = u.replace(/Systm\./g, 'System.'); applied.push(`Line ${i + 1}: Fixed typo 'Systm.' -> 'System.'`); }
-          if (u.includes('pritnln')) { u = u.replace(/pritnln/g, 'println'); applied.push(`Line ${i + 1}: Fixed typo 'pritnln' -> 'println'`); }
-          if (/\b([A-Za-z_]\w*)\s*==\s*("[^"]*")/.test(u)) { u = u.replace(/\b([A-Za-z_]\w*)\s*==\s*("[^"]*")/g, '$1.equals($2)'); applied.push(`Line ${i + 1}: Replaced == with .equals()`); }
-          if (/<=\s*([A-Za-z_]\w*\.length)\b/.test(u)) { u = u.replace(/<=\s*([A-Za-z_]\w*\.length)\b/g, '< $1'); applied.push(`Line ${i + 1}: Fixed loop bound '<=' -> '<'`); }
-          if (code.includes('Thread') && /\.run\s*\(\s*\)\s*;/.test(u)) { u = u.replace(/\.run\s*\(\s*\)\s*;/g, '.start();'); applied.push(`Line ${i + 1}: Changed '.run()' -> '.start()'`); }
-          const tc = u.trim();
-          if ((tc.startsWith('System.out.print') || tc.startsWith('return ')) && !tc.endsWith(';') && !tc.endsWith('{') && !tc.endsWith('}')) {
+          if (u.includes('Systm.')) { u = u.replace(/Systm\./g, 'System.'); applied.push(`Line ${i + 1}: Fixed 'Systm.' -> 'System.'`); }
+          if (u.includes('pritnln')) { u = u.replace(/pritnln/g, 'println'); applied.push(`Line ${i + 1}: Fixed 'pritnln' -> 'println'`); }
+          if (/\b([A-Za-z_]\w*)\s*==\s*("[^"]*")/.test(u)) {
+            u = u.replace(/\b([A-Za-z_]\w*)\s*==\s*("[^"]*")/g, '$1.equals($2)');
+            applied.push(`Line ${i + 1}: Replaced String '==' with '.equals()'`);
+          }
+          u = u.replace(/([A-Za-z_][A-Za-z0-9_.]*(?:\([^()=!]*\))?|\d+\.\d+[fFdD]?)\s*(==|!=)\s*([A-Za-z_][A-Za-z0-9_.]*(?:\([^()=!]*\))?|\d+\.\d+[fFdD]?)/g, (full, lhs, op, rhs) => {
+            const L = lhs.trim(), R = rhs.trim();
+            if (L === 'null' || R === 'null') return full;
+            if (/^\d+\.\d+[fFdD]?$/.test(L) || /^\d+\.\d+[fFdD]?$/.test(R) || floatVars.has(L) || floatVars.has(R)) {
+              applied.push(`Line ${i + 1}: Replaced floating-point '${op}' with Math.abs(...) < 1e-9`);
+              return op === '==' ? `Math.abs(${L} - ${R}) < 1e-9` : `Math.abs(${L} - ${R}) >= 1e-9`;
+            }
+            if (isBoxed(L) && isBoxed(R)) {
+              applied.push(`Line ${i + 1}: Replaced boxed wrapper '${op}' with Objects.equals(...)`);
+              return op === '==' ? `Objects.equals(${L}, ${R})` : `!Objects.equals(${L}, ${R})`;
+            }
+            return full;
+          });
+          if (/<=\s*([A-Za-z_]\w*\.(?:length|size\s*\(\s*\)))/.test(u)) {
+            u = u.replace(/<=\s*([A-Za-z_]\w*\.(?:length|size\s*\(\s*\)))/g, '< $1');
+            applied.push(`Line ${i + 1}: Fixed '<=' bound -> '<'`);
+          }
+          const t = u.trim();
+          if (t.startsWith('System.out.print') && !t.endsWith(';') && !t.endsWith('{')) {
             u = u + ';';
-            applied.push(`Line ${i + 1}: Added missing trailing ';'`);
+            applied.push(`Line ${i + 1}: Added missing ';'`);
           }
           return u;
         });
-        const fixedCode = lines.join('\n');
-        const bL = original.split(/\r?\n/), aL = fixedCode.split(/\r?\n/);
+        fixed = lines.join('\n');
         const diffLines = [];
-        const max = Math.max(bL.length, aL.length);
-        for (let i = 0; i < max; i++) {
-          if (bL[i] === aL[i]) diffLines.push(`  ${String(i + 1).padStart(2)} | ${aL[i] || ''}`);
+        const bL = original.split(/\r?\n/), aL = fixed.split(/\r?\n/);
+        for (let i = 0; i < Math.max(bL.length, aL.length); i++) {
+          if (bL[i] === aL[i]) diffLines.push(`  ${String(i + 1).padStart(3)} | ${aL[i] || ''}`);
           else {
-            if (bL[i] !== undefined) diffLines.push(`- ${String(i + 1).padStart(2)} | ${bL[i]}`);
-            if (aL[i] !== undefined) diffLines.push(`+ ${String(i + 1).padStart(2)} | ${aL[i]}`);
+            if (bL[i] !== undefined) diffLines.push(`- ${String(i + 1).padStart(3)} | ${bL[i]}`);
+            if (aL[i] !== undefined) diffLines.push(`+ ${String(i + 1).padStart(3)} | ${aL[i]}`);
           }
         }
-        return { fixedCode, appliedFixes: applied, diffLines };
+        return { fixedCode: fixed, appliedFixes: applied, diffLines };
       }
 
       function renderAnalysis(data) {
@@ -509,7 +693,10 @@ public class CleanDemo {
             return `
               <button type="button" data-jump-line="${d.line}" class="w-full text-left p-3 rounded-xl border ${cls} hover:shadow-sm transition space-y-1.5">
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-xs font-extrabold text-slate-900">${escapeHtml(d.title)}</span>
+                  <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
+                    <span class="text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-900/10 text-slate-700">${escapeHtml((d.category || 'CHECK').replace('_', ' '))}</span>
+                    <span class="text-xs font-extrabold text-slate-900">${escapeHtml(d.title)}</span>
+                  </div>
                   <span class="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge}">Line ${d.line}</span>
                 </div>
                 <p class="text-[11px] text-slate-600 leading-snug"><strong>Why:</strong> ${escapeHtml(d.message)}</p>
@@ -521,7 +708,30 @@ public class CleanDemo {
           }).join('');
         }
 
-        document.getElementById('metrics-details').innerHTML = `
+        const mcList = data.methodComplexity || [];
+        const mcHtml = mcList.length ? `
+          <div class="space-y-2">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Method Big-O &amp; Refactor Advisor</div>
+            ${mcList.map((mc) => {
+              const slow = mc.timeComplexity.includes('^2') || mc.timeComplexity.includes('^3') || mc.timeComplexity.includes('2^n');
+              const tCls = slow ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200';
+              return `
+                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                  <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <span class="font-mono font-bold text-slate-900 text-xs">${escapeHtml(mc.methodName)}()</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${tCls}">Time ${escapeHtml(mc.timeComplexity)}</span>
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">Space ${escapeHtml(mc.spaceComplexity)}</span>
+                    </div>
+                  </div>
+                  <p class="text-[11px] text-slate-600 leading-snug">${escapeHtml(mc.refactorHint)}</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : '';
+
+        document.getElementById('metrics-details').innerHTML = mcHtml + `
           <div class="grid grid-cols-2 gap-2">
             <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><span class="text-slate-500 block text-[10px]">Total Lines</span><strong class="text-slate-900 text-sm">${m.totalLines || 0}</strong></div>
             <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><span class="text-slate-500 block text-[10px]">Classes</span><strong class="text-slate-900 text-sm">${m.classCount || 0}</strong></div>
@@ -574,7 +784,12 @@ public class CleanDemo {
         if (javaServerOnline) {
           term.textContent = 'Compiling & running on live Java JDK 17 server...';
           try {
-            const res = await fetch('/api/run', { method: 'POST', body: code });
+            const stdinVal = (document.getElementById('stdin-input')?.value || '');
+            const headers = {};
+            if (stdinVal) {
+              headers['X-JavaLens-Stdin'] = btoa(unescape(encodeURIComponent(stdinVal)));
+            }
+            const res = await fetch('/api/run', { method: 'POST', headers, body: code });
             const rr = await res.json();
             let out = '';
             if (rr.stdout) out += rr.stdout + '\n';
@@ -637,6 +852,8 @@ public class CleanDemo {
 
       function selectPreset(idx) {
         editor.value = PRESETS[idx] || PRESETS[0];
+        const stdinEl = document.getElementById('stdin-input');
+        if (stdinEl) stdinEl.value = idx === 3 ? 'Girish\n94' : '';
         document.querySelectorAll('.preset-pill').forEach((b) => {
           const active = Number(b.dataset.preset) === idx;
           b.className = active
@@ -666,6 +883,16 @@ public class CleanDemo {
       document.getElementById('btn-analyze').addEventListener('click', () => { runAnalyze(); showToast('Analysis complete!'); });
       document.getElementById('btn-autofix').addEventListener('click', runAutoFix);
       document.getElementById('btn-run').addEventListener('click', runCode);
+      document.getElementById('btn-copy-code').addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(editor.value);
+          showToast('Java code copied to clipboard!');
+        } catch (e) {
+          editor.select();
+          document.execCommand('copy');
+          showToast('Java code copied!');
+        }
+      });
       document.getElementById('btn-zoom-in').addEventListener('click', () => { fontSize = Math.min(22, fontSize + 2); editor.style.fontSize = fontSize + 'px'; lineNums.style.fontSize = fontSize + 'px'; });
       document.getElementById('btn-zoom-out').addEventListener('click', () => { fontSize = Math.max(10, fontSize - 2); editor.style.fontSize = fontSize + 'px'; lineNums.style.fontSize = fontSize + 'px'; });
       document.getElementById('btn-theme-toggle').addEventListener('click', () => {

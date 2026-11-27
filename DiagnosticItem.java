@@ -1,6 +1,6 @@
 /**
  * JavaLens Pro - Pure Java Edition
- * Represents a single compiler, static analysis, or runtime diagnostic.
+ * Represents a single compiler, static, semantic, security, performance, or runtime diagnostic.
  */
 public class DiagnosticItem {
 
@@ -9,7 +9,7 @@ public class DiagnosticItem {
     }
 
     public enum Category {
-        COMPILER, STATIC_ANALYSIS, RUNTIME
+        COMPILER, STATIC_ANALYSIS, SEMANTIC, SECURITY, PERFORMANCE, RUNTIME
     }
 
     private final int line;
