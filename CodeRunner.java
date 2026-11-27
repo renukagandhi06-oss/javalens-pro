@@ -8,8 +8,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * JavaLens Pro - Live Output Terminal, Interactive Stdin & Runtime Crash Explainer
  * Compiles user Java code to a temp directory, executes it in a child JVM with a 5s safety timeout,
- * feeds optional Program Input (stdin) to Scanner/BufferedReader, captures stdout/stderr,
- * and translates runtime exceptions into plain-English fix advice.
+ * drains stdout/stderr concurrently on daemon threads (so deadlocks and timeouts still return partial output
+ * without ever throwing "Stream closed"), feeds optional stdin, and explains runtime crashes in plain English.
  */
 public class CodeRunner {
 
@@ -72,6 +72,12 @@ public class CodeRunner {
             long start = System.currentTimeMillis();
             Process proc = pb.start();
 
+            // Drain stdout and stderr concurrently so partial output before a deadlock/timeout is preserved
+            ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
+            ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
+            Thread outThread = startStreamDrainer(proc.getInputStream(), outBuf);
+            Thread errThread = startStreamDrainer(proc.getErrorStream(), errBuf);
+
             // Feed stdin (if any) and close stream so Scanner/BufferedReader does not hang forever
             try (OutputStream stdinOs = proc.getOutputStream()) {
                 if (stdinInput != null && !stdinInput.isEmpty()) {
@@ -90,13 +96,18 @@ public class CodeRunner {
 
             if (!finished) {
                 proc.destroyForcibly();
-                return new RunResult(true, -1, elapsed, readStream(proc.getInputStream()),
-                        "Execution timed out after 5 seconds (possible infinite loop).",
-                        "Check for infinite while/for loops or recursion without a base case.");
+                joinQuietly(outThread, 300);
+                joinQuietly(errThread, 300);
+                String partialOut = new String(outBuf.toByteArray(), StandardCharsets.UTF_8);
+                return new RunResult(true, -1, elapsed, partialOut,
+                        "Execution timed out after 5 seconds (possible Deadlock or Infinite Loop).",
+                        "Runtime Fix (Timeout / Deadlock): Program hung for >5 seconds. Check for circular synchronized locks (deadlock) or an infinite while/for loop.");
             }
 
-            String out = readStream(proc.getInputStream());
-            String err = readStream(proc.getErrorStream());
+            joinQuietly(outThread, 500);
+            joinQuietly(errThread, 500);
+            String out = new String(outBuf.toByteArray(), StandardCharsets.UTF_8);
+            String err = new String(errBuf.toByteArray(), StandardCharsets.UTF_8);
             String diagnosis = diagnoseRuntimeCrash(err);
 
             return new RunResult(true, proc.exitValue(), elapsed, out, err, diagnosis);
@@ -105,6 +116,37 @@ public class CodeRunner {
                     "Ensure the class contains: public static void main(String[] args)");
         } finally {
             CompilerEngine.deleteQuietly(tempDir);
+        }
+    }
+
+    private static Thread startStreamDrainer(InputStream is, ByteArrayOutputStream target) {
+        Thread t = new Thread(() -> {
+            byte[] buf = new byte[4096];
+            int total = 0;
+            final int maxBytes = 256 * 1024;
+            try {
+                int n;
+                while ((n = is.read(buf)) != -1) {
+                    if (total < maxBytes) {
+                        int writeLen = Math.min(n, maxBytes - total);
+                        target.write(buf, 0, writeLen);
+                        total += writeLen;
+                    }
+                }
+            } catch (IOException ignored) {
+                // Stream closed cleanly when process exits or is forcibly terminated on timeout
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        return t;
+    }
+
+    private static void joinQuietly(Thread t, long ms) {
+        try {
+            t.join(ms);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -138,15 +180,5 @@ public class CodeRunner {
             return "Runtime Fix: Add 'public static void main(String[] args)' inside your primary class.";
         }
         return "Runtime Exception detected - inspect the stack trace line number above.";
-    }
-
-    private static String readStream(InputStream is) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = is.read(buf)) != -1) {
-            baos.write(buf, 0, n);
-        }
-        return new String(baos.toByteArray(), StandardCharsets.UTF_8);
     }
 }
