@@ -6,12 +6,16 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JavaLens Pro - Live Output Terminal, Interactive Stdin & Runtime Crash Explainer
+ * JavaLens Pro - Live Output Terminal, Interactive Stdin & Root-Cause Correlated Debugger
  * Compiles user Java code to a temp directory, executes it in a child JVM with a 5s safety timeout,
- * drains stdout/stderr concurrently on daemon threads (so deadlocks and timeouts still return partial output
- * without ever throwing "Stream closed"), feeds optional stdin, and explains runtime crashes in plain English.
+ * drains stdout/stderr concurrently on daemon threads, feeds optional stdin, and correlates live
+ * runtime symptoms (Map: null, unexpected false, NaN, wrong thread counters, deadlocks) directly
+ * back to exact root causes detected by ConcurrencyAnalyzer and SemanticAnalyzer.
  */
 public class CodeRunner {
+
+    private final ConcurrencyAnalyzer concurrencyAnalyzer = new ConcurrencyAnalyzer();
+    private final SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer();
 
     public static class RunResult {
         public final boolean compiled;
@@ -99,24 +103,76 @@ public class CodeRunner {
                 joinQuietly(outThread, 300);
                 joinQuietly(errThread, 300);
                 String partialOut = new String(outBuf.toByteArray(), StandardCharsets.UTF_8);
+                String correlated = correlateOutputWithRootCauses(sourceCode, partialOut, "", true);
                 return new RunResult(true, -1, elapsed, partialOut,
                         "Execution timed out after 5 seconds (possible Deadlock or Infinite Loop).",
-                        "Runtime Fix (Timeout / Deadlock): Program hung for >5 seconds. Check for circular synchronized locks (deadlock) or an infinite while/for loop.");
+                        correlated);
             }
 
             joinQuietly(outThread, 500);
             joinQuietly(errThread, 500);
             String out = new String(outBuf.toByteArray(), StandardCharsets.UTF_8);
             String err = new String(errBuf.toByteArray(), StandardCharsets.UTF_8);
-            String diagnosis = diagnoseRuntimeCrash(err);
+            String baseDiagnosis = diagnoseRuntimeCrash(err);
+            String correlated = correlateOutputWithRootCauses(sourceCode, out, baseDiagnosis, false);
 
-            return new RunResult(true, proc.exitValue(), elapsed, out, err, diagnosis);
+            return new RunResult(true, proc.exitValue(), elapsed, out, err, correlated);
         } catch (Exception e) {
             return new RunResult(false, -1, 0, "", "Runner error: " + e.getMessage(),
                     "Ensure the class contains: public static void main(String[] args)");
         } finally {
             CompilerEngine.deleteQuietly(tempDir);
         }
+    }
+
+    /**
+     * Correlates live runtime symptoms (null, false, NaN, wrong counts, 5s timeout)
+     * directly back to static/semantic/concurrency root causes so users see BOTH symptom and cause.
+     */
+    private String correlateOutputWithRootCauses(String sourceCode, String stdout,
+                                                 String baseDiagnosis, boolean timedOut) {
+        List<String> notes = new ArrayList<>();
+        if (baseDiagnosis != null && !baseDiagnosis.trim().isEmpty()) {
+            notes.add(baseDiagnosis.trim());
+        }
+
+        List<DiagnosticItem> analyzed = new ArrayList<>();
+        analyzed.addAll(concurrencyAnalyzer.analyze(sourceCode));
+        analyzed.addAll(semanticAnalyzer.analyze(sourceCode));
+
+        String outLower = stdout == null ? "" : stdout.toLowerCase(Locale.ENGLISH);
+        boolean foundDeadlockCause = false;
+
+        for (DiagnosticItem d : analyzed) {
+            String id = d.getRuleId();
+
+            if ("SEM-007".equals(id) && (outLower.contains("null") || outLower.contains("false"))) {
+                notes.add("Root-Cause Link (Map/Set returned null or false) [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            } else if ("CONC-002".equals(id)) {
+                notes.add("Root-Cause Link (Corrupted / Lost Count) [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            } else if ("CONC-001".equals(id) && timedOut) {
+                foundDeadlockCause = true;
+                notes.add("Root-Cause Link (Confirmed Deadlock Timeout) [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            } else if ("SEM-001".equals(id) && outLower.contains("false")) {
+                notes.add("Root-Cause Link (Unexpected 'false' in Output) [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            } else if ("SEM-002".equals(id) && !outLower.isEmpty()) {
+                notes.add("Root-Cause Link (Boxed Wrapper '==' Trap) [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            } else if ("SEM-005".equals(id) && outLower.contains("nan")) {
+                notes.add("Root-Cause Link ('NaN' in Output) [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            }
+        }
+
+        if (timedOut && !foundDeadlockCause) {
+            notes.add("Runtime Fix (Timeout / Deadlock): Program hung for >5 seconds. Check for circular synchronized locks (deadlock) or an infinite while/for loop.");
+        }
+
+        return String.join("\n>> ", notes);
     }
 
     private static Thread startStreamDrainer(InputStream is, ByteArrayOutputStream target) {
