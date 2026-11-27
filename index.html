@@ -155,9 +155,26 @@
               <button type="button" id="btn-copy-code" class="px-2.5 py-1 rounded-lg bg-slate-200/80 hover:bg-slate-300 text-slate-800 text-[11px] font-bold transition">Copy Code</button>
             </div>
           </div>
+          <!-- Clickable Class & Method Outline Bar (Eclipse Outline View) -->
+          <div id="outline-bar" class="px-3.5 py-2 bg-slate-100/80 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto text-[11px]">
+            <span class="font-bold uppercase tracking-wider text-slate-400 text-[10px] shrink-0 mr-1">Outline:</span>
+            <div id="outline-pills" class="flex items-center gap-1.5"></div>
+          </div>
           <div class="flex relative min-h-[300px] max-h-[400px] bg-slate-950 text-slate-100">
-            <pre id="line-numbers" class="code-font select-none text-right px-3 py-3 text-xs leading-6 text-slate-500 bg-slate-900 border-r border-slate-800 overflow-hidden"></pre>
+            <div id="line-numbers" class="code-font select-none text-right px-2.5 py-3 text-xs leading-6 text-slate-500 bg-slate-900 border-r border-slate-800 overflow-hidden shrink-0 min-w-[46px]"></div>
             <textarea id="code-editor" spellcheck="false" aria-label="Java Source Code Editor" class="code-font flex-1 bg-transparent text-slate-100 text-sm leading-6 p-3 focus:outline-none resize-none overflow-auto whitespace-pre"></textarea>
+          </div>
+          <!-- Live IDE Status Bar (VS Code / IntelliJ style) -->
+          <div class="px-3.5 py-1.5 bg-slate-900 border-t border-slate-800 text-[11px] font-mono text-slate-400 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+              <span id="ide-cursor-pos" class="text-slate-200 font-semibold">Ln 1, Col 1</span>
+              <span class="hidden sm:inline">Spaces: 4</span>
+              <span class="hidden sm:inline">UTF-8</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span id="ide-status-counts" class="text-emerald-400 font-semibold">0 Errors · 0 Warnings</span>
+              <span class="text-slate-500">OpenJDK 17</span>
+            </div>
           </div>
         </div>
 
@@ -563,13 +580,62 @@ public class DeepStressTest {
         return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
 
+      let lineSeverityMap = {};
+
+      function updateCursorStatus() {
+        const posEl = document.getElementById('ide-cursor-pos');
+        if (!posEl) return;
+        const pos = editor.selectionStart || 0;
+        const before = editor.value.slice(0, pos).split('\n');
+        const ln = before.length;
+        const col = before[before.length - 1].length + 1;
+        posEl.textContent = `Ln ${ln}, Col ${col}`;
+      }
+
+      function updateOutline() {
+        const box = document.getElementById('outline-pills');
+        if (!box) return;
+        const lines = editor.value.split(/\r?\n/);
+        const items = [];
+        lines.forEach((raw, idx) => {
+          const s = raw.split('//')[0];
+          const mc = /\bclass\s+([A-Za-z_]\w*)/.exec(s);
+          if (mc) items.push({ kind: 'C', name: mc[1], line: idx + 1 });
+          const mm = /^\s*(?:(?:public|private|protected|static|final|synchronized)\s+)+[A-Za-z0-9_<>,\[\]\s]+\s+([A-Za-z_]\w*)\s*\([^)]*\)/.exec(s);
+          if (mm && !['if', 'for', 'while', 'switch', 'catch'].includes(mm[1])) {
+            items.push({ kind: 'M', name: mm[1] + '()', line: idx + 1 });
+          }
+        });
+        box.innerHTML = items.length
+          ? items.map((it) => {
+              const badge = it.kind === 'C'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-sky-600 text-white';
+              return `<button type="button" data-jump-line="${it.line}" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white hover:bg-emerald-50 border border-slate-200 text-slate-700 font-mono text-[11px] font-semibold shrink-0 transition"><span class="w-3.5 h-3.5 rounded text-[9px] font-extrabold inline-flex items-center justify-center ${badge}">${it.kind}</span><span>${escapeHtml(it.name)}</span></button>`;
+            }).join('')
+          : '<span class="text-slate-400 italic">No classes or methods yet</span>';
+      }
+
       function updateLineNumbers() {
         const count = editor.value.split('\n').length;
-        let out = '';
-        for (let i = 1; i <= count; i++) out += i + '\n';
-        lineNums.textContent = out;
-        const m = editor.value.match(/\bpublic\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/);
+        const rows = [];
+        for (let i = 1; i <= count; i++) {
+          const sev = lineSeverityMap[i];
+          const dot = sev === 'ERROR'
+            ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 mr-1 align-middle" title="Error on line ' + i + '"></span>'
+            : sev === 'WARNING'
+              ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1 align-middle" title="Warning on line ' + i + '"></span>'
+              : sev === 'INFO'
+                ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 mr-1 align-middle" title="Info on line ' + i + '"></span>'
+                : '';
+          const numCls = sev === 'ERROR' ? 'text-rose-400 font-bold' : sev === 'WARNING' ? 'text-amber-300 font-semibold' : 'text-slate-500';
+          rows.push(`<div data-jump-line="${i}" class="cursor-pointer hover:text-white leading-6 ${numCls}">${dot}${i}</div>`);
+        }
+        lineNums.innerHTML = rows.join('');
+        const m = editor.value.match(/\bclass\s+([A-Za-z_][A-Za-z0-9_]*)/);
         document.getElementById('active-class-label').textContent = (m ? m[1] : 'UserProgram') + '.java';
+        updateOutline();
+        updateCursorStatus();
       }
 
       function localAnalyze(code) {
@@ -808,6 +874,23 @@ public class DeepStressTest {
           }
         }
 
+        // SEM-008: BrokenNullCheck / MisplacedNullCheck + SEC-005 + SEC-006
+        lines.forEach((raw, idx) => {
+          const s = raw.split('//')[0];
+          const m = /\b([A-Za-z_]\w*)\.[A-Za-z_]\w*[^&|;]*&&\s*\1\s*!=\s*null\b/.exec(s);
+          if (m) {
+            diags.push({ line: idx + 1, severity: 'ERROR', category: 'SEMANTIC', ruleId: 'SEM-008', title: `BrokenNullCheck / MisplacedNullCheck on '${m[1]}'`, message: `Cause: '${m[1]}' is dereferenced BEFORE checking '${m[1]} != null'. Runtime Consequence: Throws NullPointerException immediately whenever '${m[1]}' is null!`, suggestion: `Move '${m[1]} != null' to the left side of &&.` });
+          }
+          const mCmd = /(?:Runtime\.getRuntime\(\)\.exec|new\s+ProcessBuilder)\s*\([^;]*"[^"]+"\s*\+\s*[A-Za-z_]\w*/.exec(s);
+          if (mCmd) {
+            diags.push({ line: idx + 1, severity: 'ERROR', category: 'SECURITY', ruleId: 'SEC-006', title: 'OS Command Injection Vulnerability', message: 'Cause: Concatenating untrusted input into Runtime.exec() or ProcessBuilder. Runtime Consequence: Attackers can execute arbitrary OS shell commands!', suggestion: 'Pass arguments separately to ProcessBuilder and validate against an allowlist.' });
+          }
+          const mRx = /(?:Pattern\.compile|\.matches|\.replaceAll|\.split)\s*\(\s*"([^"]+)"/.exec(s);
+          if (mRx && (/\([^()]*[+*][^()]*\)\s*[+*]/.test(mRx[1]) || mRx[1].includes('(.+)+') || mRx[1].includes('(.*)*'))) {
+            diags.push({ line: idx + 1, severity: 'ERROR', category: 'SECURITY', ruleId: 'SEC-005', title: 'CatastrophicRegex (ReDoS Vulnerability)', message: `Cause: Regex "${mRx[1]}" has nested quantifiers. Runtime Consequence: Exponential backtracking can freeze the JVM CPU on short crafted input!`, suggestion: 'Flatten nested quantifiers or use possessive quantifiers (++).' });
+          }
+        });
+
         const methodComplexity = [];
         const mhRe = /^\s*(?:(?:public|private|protected|static|final)\s+)+[A-Za-z0-9_<>,\[\]\s]+\s+([A-Za-z_]\w*)\s*\([^)]*\)/;
         for (let i = 0; i < lines.length; i++) {
@@ -949,6 +1032,19 @@ public class DeepStressTest {
 
         document.getElementById('stat-errors').textContent = errs;
         document.getElementById('stat-warnings').textContent = warns;
+        const statusCounts = document.getElementById('ide-status-counts');
+        if (statusCounts) {
+          statusCounts.textContent = `${errs} Error${errs === 1 ? '' : 's'} · ${warns} Warning${warns === 1 ? '' : 's'}`;
+          statusCounts.className = errs > 0 ? 'text-rose-400 font-semibold' : warns > 0 ? 'text-amber-300 font-semibold' : 'text-emerald-400 font-semibold';
+        }
+        lineSeverityMap = {};
+        diags.forEach((d) => {
+          const cur = lineSeverityMap[d.line];
+          if (!cur || d.severity === 'ERROR' || (d.severity === 'WARNING' && cur === 'INFO')) {
+            lineSeverityMap[d.line] = d.severity;
+          }
+        });
+        updateLineNumbers();
         document.getElementById('stat-complexity').textContent = m.complexity || 1;
         document.getElementById('health-grade-badge').textContent = `${m.healthScore || 0} / 100 (${m.healthGrade || 'A'})`;
         const scoreVal = m.healthScore || 0;
@@ -1171,6 +1267,16 @@ public class DeepStressTest {
       // Wire events
       editor.addEventListener('input', updateLineNumbers);
       editor.addEventListener('scroll', () => { lineNums.scrollTop = editor.scrollTop; });
+      editor.addEventListener('keyup', updateCursorStatus);
+      editor.addEventListener('click', updateCursorStatus);
+      document.getElementById('outline-bar').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-jump-line]');
+        if (b) jumpToLine(Number(b.dataset.jumpLine));
+      });
+      lineNums.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-jump-line]');
+        if (b) jumpToLine(Number(b.dataset.jumpLine));
+      });
       document.querySelectorAll('.preset-pill').forEach((b) => {
         b.addEventListener('click', () => selectPreset(Number(b.dataset.preset)));
       });

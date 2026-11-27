@@ -193,7 +193,12 @@ public class CodeRunner {
                 if (timedOut) explainedTimeout = true;
                 notes.add("Root-Cause Link (Confirmed InfiniteLoop Timeout) [Line " + d.getLine() + "]: "
                         + d.getMessage() + " Fix: " + d.getSuggestion());
-            } else if ("CONC-003".equals(id) || "CONC-004".equals(id) || "SEC-003".equals(id)) {
+            } else if (("CONC-005".equals(id) || "SEC-005".equals(id)) && timedOut) {
+                explainedTimeout = true;
+                notes.add("Root-Cause Link (Confirmed Timeout Cause: " + d.getTitle() + ") [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            } else if ("CONC-003".equals(id) || "CONC-004".equals(id) || "CONC-005".equals(id)
+                    || "SEM-008".equals(id) || "SEC-003".equals(id) || "SEC-005".equals(id) || "SEC-006".equals(id)) {
                 notes.add("Root-Cause Link (" + d.getTitle() + ") [Line " + d.getLine() + "]: "
                         + d.getMessage() + " Fix: " + d.getSuggestion());
             } else if ("SEM-007".equals(id) && (outLower.contains("null") || outLower.contains("false"))) {

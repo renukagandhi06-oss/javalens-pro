@@ -149,16 +149,19 @@ public class SemanticAnalyzer {
                 }
             }
 
-            // SEM-004: ConcurrentModificationException in for-each loop
-            if (activeForEachCol != null && code.contains(activeForEachCol + ".remove(")) {
+            // SEM-004: IteratorInvalidation / ConcurrentModificationException in for-each loop
+            if (activeForEachCol != null && (code.contains(activeForEachCol + ".remove(") || code.contains(activeForEachCol + ".add("))) {
+                boolean isAdd = code.contains(activeForEachCol + ".add(");
+                String opName = isAdd ? ".add(" : ".remove(";
                 findings.add(new DiagnosticItem(
-                        lineNum, code.indexOf(activeForEachCol + ".remove(") + 1,
+                        lineNum, code.indexOf(activeForEachCol + opName) + 1,
                         DiagnosticItem.Severity.ERROR,
                         DiagnosticItem.Category.SEMANTIC,
                         "SEM-004",
-                        "ConcurrentModificationException Risk",
-                        "Calling " + activeForEachCol + ".remove(...) while iterating with a for-each loop crashes at runtime.",
-                        "Use an explicit Iterator with it.remove(), or " + activeForEachCol + ".removeIf(item -> ...)."
+                        "IteratorInvalidation (ConcurrentModificationException)",
+                        "Cause: Calling " + activeForEachCol + opName + "...) while iterating with a for-each loop. Runtime Consequence: Fail-fast iterator immediately throws ConcurrentModificationException at runtime!",
+                        isAdd ? "Collect new items in a separate temporary list and call " + activeForEachCol + ".addAll(toAdd) after the loop."
+                              : "Use an explicit Iterator with it.remove(), or " + activeForEachCol + ".removeIf(item -> ...)."
                 ));
             }
 

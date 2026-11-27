@@ -9,12 +9,15 @@ import java.util.regex.Pattern;
  *  - SEC-002: Hardcoded secrets, passwords, or API keys
  *  - SEC-003: Unclosed AutoCloseable Resource Leak (FileInputStream, Scanner, BufferedReader, Socket, Connection, etc.)
  *  - SEC-004: Weak randomness (Math.random / java.util.Random) in security context
+ *  - SEC-006: OS Command Injection via Runtime.exec / ProcessBuilder string concatenation
  */
 public class SecurityScanner {
 
     private static final Pattern SQL_CONCAT = Pattern.compile(
             "\"[^\"]*\\b(?:SELECT|INSERT|UPDATE|DELETE)\\b[^\"]*\"\\s*\\+\\s*[A-Za-z_][A-Za-z0-9_]*",
             Pattern.CASE_INSENSITIVE);
+    private static final Pattern CMD_INJECTION = Pattern.compile(
+            "(?:Runtime\\.getRuntime\\(\\)\\.exec|new\\s+ProcessBuilder)\\s*\\([^;]*\"[^\"]+\"\\s*\\+\\s*[A-Za-z_][A-Za-z0-9_]*");
     private static final Pattern HARDCODED_SECRET = Pattern.compile(
             "\\bString\\s+[A-Za-z0-9_]*(?:password|passwd|secret|apiKey|api_key|token|authKey)[A-Za-z0-9_]*\\s*=\\s*\"[^\"]{3,}\"",
             Pattern.CASE_INSENSITIVE);
@@ -46,6 +49,20 @@ public class SecurityScanner {
                         "SQL Injection Vulnerability",
                         "Cause: Building SQL queries with '+' string concatenation. Runtime Consequence: Attackers can inject arbitrary SQL statements to steal or delete database records.",
                         "Use PreparedStatement with '?' placeholders and ps.setString(1, value)."
+                ));
+            }
+
+            // SEC-006: OS Command Injection
+            Matcher mcmd = CMD_INJECTION.matcher(code);
+            if (mcmd.find()) {
+                findings.add(new DiagnosticItem(
+                        lineNum, mcmd.start() + 1,
+                        DiagnosticItem.Severity.ERROR,
+                        DiagnosticItem.Category.SECURITY,
+                        "SEC-006",
+                        "OS Command Injection Vulnerability",
+                        "Cause: Concatenating untrusted input into Runtime.exec() or ProcessBuilder command string. Runtime Consequence: Attackers can append shell metacharacters ('; rm -rf', '&& ...') to execute arbitrary OS commands!",
+                        "Pass command and arguments as separate ProcessBuilder list elements and validate input against an allowlist."
                 ));
             }
 

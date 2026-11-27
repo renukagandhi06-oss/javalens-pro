@@ -4,11 +4,15 @@ import java.util.regex.Pattern;
 
 /**
  * JavaLens Pro - Deep Static Bug Analyzer (16th Pure Java OOP Class)
- * Detects subtle algorithmic, numeric, and concurrency bugs statically with Cause + Runtime Consequence + Fix:
- *  - OVF-001 : Silent 32-bit Integer Overflow in multiplicative/additive loops
+ * Detects subtle algorithmic, numeric, memory-model, regex, null-flow, and concurrency bugs statically:
+ *  - OVF-001 : Silent 32-bit Integer Overflow in multiplicative loops
  *  - LOOP-001: Binary Search / Loop Variable Stagnation Infinite Loop (lo = mid instead of lo = mid + 1)
  *  - CONC-003: Double-Checked Locking (DCL) Singleton without volatile
  *  - CONC-004: Check-Then-Act Race (containsKey/get followed by put on shared Map in concurrent context)
+ *  - CONC-005: VisibilityBug (shared flag polled in loop & mutated across threads without volatile/sync)
+ *  - SEM-008 : BrokenNullCheck / MisplacedNullCheck (dereferencing variable before != null check or inside == null)
+ *  - SEC-005 : CatastrophicRegex / ReDoS (nested quantifiers like (a+)+ or (.+)*)
+ *  - STAT-009: Swallowed / LosingExceptionInfo (catch block ignoring exception variable without logging or rethrowing)
  */
 public class DeepBugAnalyzer {
 
@@ -23,6 +27,14 @@ public class DeepBugAnalyzer {
             "\\b(?:private|public|protected|static|final|volatile|\\s)+([A-Za-z_][A-Za-z0-9_<>]*)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?:=|;)");
     private static final Pattern CONCURRENT_CTX = Pattern.compile(
             "(?:\\.(?:submit|execute|parallelStream)\\s*\\(|\\bnew\\s+Thread\\s*\\(|\\bRunnable\\b|\\bCallable\\b)");
+    private static final Pattern MISPLACED_NULL_CHECK = Pattern.compile(
+            "\\b([A-Za-z_][A-Za-z0-9_]*)\\.[A-Za-z_][A-Za-z0-9_]*[^&|;]*&&\\s*\\1\\s*!=\\s*null\\b");
+    private static final Pattern REGEX_CALL = Pattern.compile(
+            "(?:Pattern\\.compile|\\.matches|\\.replaceAll|\\.split)\\s*\\(\\s*\"([^\"]+)\"");
+    private static final Pattern NESTED_QUANTIFIER = Pattern.compile(
+            "\\([^()]*[+*][^()]*\\)\\s*[+*]");
+    private static final Pattern CATCH_HEADER = Pattern.compile(
+            "\\bcatch\\s*\\([^)]+\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\)");
 
     public List<DiagnosticItem> analyze(String sourceCode) {
         List<DiagnosticItem> findings = new ArrayList<>();
@@ -35,13 +47,14 @@ public class DeepBugAnalyzer {
         detectBinarySearchInfiniteLoop(lines, findings);
         detectDclWithoutVolatile(sourceCode, lines, findings);
         detectCheckThenActRace(lines, findings);
+        detectVisibilityBug(sourceCode, lines, findings);
+        detectBrokenNullCheck(lines, findings);
+        detectCatastrophicRegex(lines, findings);
+        detectSwallowedException(lines, findings);
 
         return findings;
     }
 
-    /**
-     * OVF-001: Detects 32-bit int multiplicative/exponential growth inside loops that overflows Integer.MAX_VALUE.
-     */
     private void detectIntegerOverflow(String[] lines, List<DiagnosticItem> findings) {
         Map<String, Long> intInitVals = new HashMap<>();
         Set<String> intVars = new HashSet<>();
@@ -54,9 +67,7 @@ public class DeepBugAnalyzer {
                 intVars.add(var);
                 String init = m.group(2);
                 if (init != null) {
-                    try {
-                        intInitVals.put(var, Long.parseLong(init.trim()));
-                    } catch (NumberFormatException ignored) {}
+                    try { intInitVals.put(var, Long.parseLong(init.trim())); } catch (NumberFormatException ignored) {}
                 }
             }
         }
@@ -100,12 +111,8 @@ public class DeepBugAnalyzer {
                             long val = initVal;
                             boolean overflowed = false;
                             for (int k = 0; k < iters; k++) {
-                                if (val > Integer.MAX_VALUE / factor) {
-                                    overflowed = true;
-                                }
-                                if (val <= Long.MAX_VALUE / factor) {
-                                    val *= factor;
-                                }
+                                if (val > Integer.MAX_VALUE / factor) overflowed = true;
+                                if (val <= Long.MAX_VALUE / factor) val *= factor;
                             }
                             if (overflowed) {
                                 expectedDetail = " After " + iters + " iterations, expected value (" + val
@@ -140,9 +147,6 @@ public class DeepBugAnalyzer {
         }
     }
 
-    /**
-     * LOOP-001: Detects binary search infinite loop where lo = mid (instead of lo = mid + 1) stagnates when lo + 1 == hi.
-     */
     private void detectBinarySearchInfiniteLoop(String[] lines, List<DiagnosticItem> findings) {
         int n = lines.length;
         for (int i = 0; i < n; i++) {
@@ -160,9 +164,7 @@ public class DeepBugAnalyzer {
                 String cur = stripComment(lines[j]);
                 if (j > i && entered) {
                     Matcher mm = MID_CALC.matcher(cur);
-                    if (mm.find()) {
-                        midVar = mm.group(1);
-                    }
+                    if (mm.find()) midVar = mm.group(1);
                     if (midVar != null) {
                         Pattern stagnate = Pattern.compile("\\b" + Pattern.quote(loVar) + "\\s*=\\s*" + Pattern.quote(midVar) + "\\s*;");
                         Matcher ms = stagnate.matcher(cur);
@@ -192,16 +194,13 @@ public class DeepBugAnalyzer {
         }
     }
 
-    /**
-     * CONC-003: Detects Double-Checked Locking (null check -> synchronized -> null check -> assign) without volatile.
-     */
     private void detectDclWithoutVolatile(String sourceCode, String[] lines, List<DiagnosticItem> findings) {
         Map<String, Boolean> fieldVolatile = new HashMap<>();
         Map<String, Integer> fieldLine = new HashMap<>();
 
         for (int i = 0; i < lines.length; i++) {
             String s = stripComment(lines[i]);
-            if (s.contains("(") && !s.contains("=")) continue; // skip method headers
+            if (s.contains("(") && !s.contains("=")) continue;
             Matcher mf = FIELD_DECL.matcher(s);
             if (mf.find()) {
                 String varName = mf.group(2);
@@ -254,9 +253,6 @@ public class DeepBugAnalyzer {
         }
     }
 
-    /**
-     * CONC-004: Detects non-atomic Check-Then-Act (containsKey/get followed by put) on a shared Map in concurrent tasks.
-     */
     private void detectCheckThenActRace(String[] lines, List<DiagnosticItem> findings) {
         int braceDepth = 0;
         boolean inConcurrent = false;
@@ -303,6 +299,152 @@ public class DeepBugAnalyzer {
                         inConcurrent = false;
                         concurrentTarget = -1;
                     }
+                }
+            }
+        }
+    }
+
+    /**
+     * CONC-005: Shared boolean/int flag polled in a while-loop across threads without volatile/synchronized.
+     */
+    private void detectVisibilityBug(String sourceCode, String[] lines, List<DiagnosticItem> findings) {
+        if (!CONCURRENT_CTX.matcher(sourceCode).find()) return;
+        Map<String, Integer> nonVolatileFlags = new LinkedHashMap<>();
+        Pattern flagDecl = Pattern.compile("\\b(?:static|private|public|protected|\\s)+boolean\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?:=|;)");
+
+        for (int i = 0; i < lines.length; i++) {
+            String s = stripComment(lines[i]);
+            if (s.contains("volatile") || s.contains("(")) continue;
+            Matcher m = flagDecl.matcher(s);
+            if (m.find()) nonVolatileFlags.put(m.group(1), i + 1);
+        }
+
+        for (Map.Entry<String, Integer> e : nonVolatileFlags.entrySet()) {
+            String flag = e.getKey();
+            int declLine = e.getValue();
+            Pattern pollLoop = Pattern.compile("\\bwhile\\s*\\(\\s*!?\\s*" + Pattern.quote(flag) + "\\s*\\)");
+            for (int i = 0; i < lines.length; i++) {
+                String s = stripComment(lines[i]);
+                if (pollLoop.matcher(s).find() && !s.contains("synchronized")) {
+                    findings.add(new DiagnosticItem(
+                            declLine, 1,
+                            DiagnosticItem.Severity.ERROR,
+                            DiagnosticItem.Category.SEMANTIC,
+                            "CONC-005",
+                            "VisibilityBug on Shared Flag '" + flag + "'",
+                            "Cause: Shared boolean flag '" + flag + "' is polled in a while-loop (Line " + (i + 1)
+                                    + ") across threads without 'volatile' or synchronization. Runtime Consequence: The JIT compiler can cache '"
+                                    + flag + "' in a CPU register so the worker thread NEVER sees updates and loops forever!",
+                            "Declare '" + flag + "' as volatile (static volatile boolean " + flag + ") or use AtomicBoolean."
+                    ));
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * SEM-008: BrokenNullCheck / MisplacedNullCheck (dereference before != null, or dereference inside == null).
+     */
+    private void detectBrokenNullCheck(String[] lines, List<DiagnosticItem> findings) {
+        for (int i = 0; i < lines.length; i++) {
+            String s = stripComment(lines[i]);
+            Matcher m = MISPLACED_NULL_CHECK.matcher(s);
+            if (m.find()) {
+                String v = m.group(1);
+                findings.add(new DiagnosticItem(
+                        i + 1, m.start() + 1,
+                        DiagnosticItem.Severity.ERROR,
+                        DiagnosticItem.Category.SEMANTIC,
+                        "SEM-008",
+                        "BrokenNullCheck / MisplacedNullCheck on '" + v + "'",
+                        "Cause: '" + v + "' is dereferenced BEFORE checking '" + v + " != null' in the && condition. Runtime Consequence: Throws NullPointerException immediately whenever '" + v + "' is null - the null check is never even reached!",
+                        "Move '" + v + " != null' to the LEFT side of && so short-circuit evaluation protects the dereference."
+                ));
+            }
+            Matcher mEqNull = Pattern.compile("\\bif\\s*\\(\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*==\\s*null\\s*\\)").matcher(s);
+            if (mEqNull.find()) {
+                String v = mEqNull.group(1);
+                String checkLine = s.substring(mEqNull.end());
+                String nextLine = (i + 1 < lines.length) ? stripComment(lines[i + 1]) : "";
+                if (checkLine.contains(v + ".") || (!checkLine.contains("return") && !checkLine.contains("throw") && nextLine.contains(v + ".") && !nextLine.contains("else"))) {
+                    findings.add(new DiagnosticItem(
+                            i + 1, mEqNull.start() + 1,
+                            DiagnosticItem.Severity.ERROR,
+                            DiagnosticItem.Category.SEMANTIC,
+                            "SEM-008",
+                            "BrokenNullCheck: Dereferencing Known-Null '" + v + "'",
+                            "Cause: '" + v + "' is confirmed null inside 'if (" + v + " == null)' and then dereferenced with '" + v + ".'. Runtime Consequence: Guaranteed NullPointerException at runtime!",
+                            "Flip the check to 'if (" + v + " != null)' or return/initialize '" + v + "' before calling methods on it."
+                    ));
+                }
+            }
+        }
+    }
+
+    /**
+     * SEC-005: Catastrophic Backtracking Regex (ReDoS) detection.
+     */
+    private void detectCatastrophicRegex(String[] lines, List<DiagnosticItem> findings) {
+        for (int i = 0; i < lines.length; i++) {
+            String s = stripComment(lines[i]);
+            Matcher m = REGEX_CALL.matcher(s);
+            while (m.find()) {
+                String regex = m.group(1);
+                if (NESTED_QUANTIFIER.matcher(regex).find() || regex.contains("(.+)+") || regex.contains("(.*)*")) {
+                    findings.add(new DiagnosticItem(
+                            i + 1, m.start() + 1,
+                            DiagnosticItem.Severity.ERROR,
+                            DiagnosticItem.Category.SECURITY,
+                            "SEC-005",
+                            "CatastrophicRegex (ReDoS Vulnerability)",
+                            "Cause: Regex \"" + regex + "\" contains nested quantifiers (e.g. (a+)+ or (.+)*). Runtime Consequence: Exponential O(2^n) backtracking can freeze the JVM CPU for minutes on a 30-character crafted input (Denial of Service)!",
+                            "Flatten nested quantifiers (e.g. use possessive quantifiers '++' or atomic groups '(?>...)') to guarantee linear matching time."
+                    ));
+                }
+            }
+        }
+    }
+
+    /**
+     * STAT-009: Swallowed / LosingExceptionInfo (catch block ignores exception variable without logging or rethrowing).
+     */
+    private void detectSwallowedException(String[] lines, List<DiagnosticItem> findings) {
+        int n = lines.length;
+        for (int i = 0; i < n; i++) {
+            String s = stripComment(lines[i]);
+            Matcher mc = CATCH_HEADER.matcher(s);
+            if (!mc.find()) continue;
+            String exVar = mc.group(1);
+
+            int depth = 0;
+            boolean entered = false;
+            StringBuilder body = new StringBuilder();
+            for (int j = i; j < n; j++) {
+                String cur = stripComment(lines[j]);
+                for (int c = 0; c < cur.length(); c++) {
+                    char ch = cur.charAt(c);
+                    if (ch == '{') { depth++; entered = true; }
+                    else if (ch == '}') depth--;
+                    else if (entered && depth >= 1) body.append(ch);
+                }
+                if (entered && depth == 0) break;
+            }
+
+            String b = body.toString().trim();
+            if (!b.isEmpty()) {
+                boolean usesEx = Pattern.compile("\\b" + Pattern.quote(exVar) + "\\b").matcher(b).find();
+                boolean rethrows = b.contains("throw ");
+                if (!usesEx && !rethrows) {
+                    findings.add(new DiagnosticItem(
+                            i + 1, mc.start() + 1,
+                            DiagnosticItem.Severity.WARNING,
+                            DiagnosticItem.Category.STATIC_ANALYSIS,
+                            "STAT-009",
+                            "LosingExceptionInfo (Swallowed '" + exVar + "')",
+                            "Cause: Catch block captures '" + exVar + "' but never logs, prints, or rethrows it. Runtime Consequence: Original failure cause and stack trace are silently lost, making production bugs nearly impossible to diagnose.",
+                            "Log or wrap the exception: System.err.println(" + exVar + ".getMessage()); or throw new RuntimeException(" + exVar + ");"
+                    ));
                 }
             }
         }
