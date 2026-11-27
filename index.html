@@ -103,7 +103,8 @@
         <button type="button" data-preset="1" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">String &amp; Bounds</button>
         <button type="button" data-preset="2" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Security &amp; Leaks</button>
         <button type="button" data-preset="3" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Scanner Input</button>
-        <button type="button" data-preset="4" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Clean Benchmark</button>
+        <button type="button" data-preset="4" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Concurrency &amp; Hash</button>
+        <button type="button" data-preset="5" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Clean Benchmark</button>
         <button type="button" id="btn-blank-editor" class="px-3 py-1.5 rounded-xl bg-slate-900/50 hover:bg-slate-900/70 border border-white/20 text-white text-xs font-semibold transition">+ Blank Editor</button>
       </div>
     </section>
@@ -353,6 +354,58 @@ public class GradeCalculator {
     }
 }`,
 `import java.util.*;
+import java.util.concurrent.*;
+
+public class Nasty {
+    static class Point {
+        int x, y;
+        Point(int x, int y) { this.x = x; this.y = y; }
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof Point)) return false;
+            Point p = (Point) o;
+            return x == p.x && y == p.y;
+        }
+    }
+
+    static final Object lockA = new Object();
+    static final Object lockB = new Object();
+
+    public static void main(String[] args) throws Exception {
+        Map<Point, String> map = new HashMap<>();
+        Point p1 = new Point(1, 2);
+        Point p2 = new Point(1, 2);
+        map.put(p1, "found");
+        System.out.println("Map: " + map.get(p2));
+
+        final int[] counter = {0};
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        for (int t = 0; t < 2; t++) {
+            pool.submit(() -> {
+                for (int i = 0; i < 500000; i++) counter[0]++;
+            });
+        }
+        pool.shutdown();
+        pool.awaitTermination(10, TimeUnit.SECONDS);
+        System.out.println("Counter: " + counter[0] + " (expected 1000000)");
+
+        Thread t1 = new Thread(() -> {
+            synchronized (lockA) {
+                try { Thread.sleep(100); } catch (Exception e) {}
+                synchronized (lockB) {}
+            }
+        });
+        Thread t2 = new Thread(() -> {
+            synchronized (lockB) {
+                try { Thread.sleep(100); } catch (Exception e) {}
+                synchronized (lockA) {}
+            }
+        });
+        t1.start();
+        t2.start();
+    }
+}`,
+`import java.util.*;
 
 public class CleanBankAccount {
     private final String owner;
@@ -528,6 +581,99 @@ public class CleanBankAccount {
           }
         });
 
+        // SEM-007: equals() without hashCode() traced to HashMap/HashSet key lookups
+        for (let i = 0; i < lines.length; i++) {
+          const mc = /\bclass\s+([A-Za-z_]\w*)\b/.exec(lines[i].split('//')[0]);
+          if (!mc) continue;
+          const clsName = mc[1];
+          let d = 0, entered = false, eqLine = -1, hasHash = false;
+          for (let j = i; j < lines.length; j++) {
+            const cur = lines[j].split('//')[0];
+            if (entered && d === 1) {
+              if (cur.includes('boolean equals(')) eqLine = j + 1;
+              if (cur.includes('int hashCode(')) hasHash = true;
+            }
+            for (const ch of cur) { if (ch === '{') { d++; entered = true; } else if (ch === '}') d--; }
+            if (entered && d === 0) break;
+          }
+          if (eqLine > 0 && !hasHash) {
+            const hashRe = new RegExp(`\\b(?:HashMap|Map|ConcurrentHashMap|HashSet|Set)\\s*<\\s*${clsName}\\b`);
+            let usageLine = -1;
+            for (let k = 0; k < lines.length; k++) {
+              if (hashRe.test(lines[k].split('//')[0])) { usageLine = k + 1; break; }
+            }
+            if (usageLine > 0) {
+              diags.push({ line: eqLine, severity: 'ERROR', category: 'SEMANTIC', ruleId: 'SEM-007', title: 'equals() Without hashCode() -> Silent Map/Set Lookup Failure', message: `Cause: '${clsName}' overrides equals() without hashCode() and is used as a hashed key on Line ${usageLine}. Runtime Consequence: Equal ${clsName} keys hash to different buckets, so map.get()/set.contains() silently returns null/false (silent data loss at runtime)!`, suggestion: `Override hashCode() in '${clsName}' using Objects.hash(...) (Auto-Fix supported).` });
+            } else {
+              diags.push({ line: eqLine, severity: 'WARNING', category: 'SEMANTIC', ruleId: 'SEM-007', title: `Missing hashCode() Override in '${clsName}'`, message: `Cause: '${clsName}' overrides equals() without hashCode(). Runtime Consequence: HashMap/HashSet lookups on '${clsName}' will silently fail.`, suggestion: 'Override hashCode() using Objects.hash(...) (Auto-Fix supported).' });
+            }
+          }
+        }
+
+        // CONC-001: Lock-ordering Deadlock Cycle Detection
+        const lockStack = [], lockDepths = [], lockGraph = {};
+        let bd = 0;
+        lines.forEach((raw, idx) => {
+          const cur = raw.split('//')[0];
+          const ms = /\bsynchronized\s*\(\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\)/.exec(cur);
+          if (ms) {
+            const lk = ms[1];
+            if (lockStack.length && lockStack[lockStack.length - 1] !== lk) {
+              const outer = lockStack[lockStack.length - 1];
+              if (!lockGraph[outer]) lockGraph[outer] = {};
+              if (!lockGraph[outer][lk]) lockGraph[outer][lk] = idx + 1;
+            }
+            if (cur.includes('{')) { lockStack.push(lk); lockDepths.push(bd + 1); }
+          }
+          for (const ch of cur) {
+            if (ch === '{') bd++;
+            else if (ch === '}') {
+              bd--;
+              while (lockDepths.length && bd < lockDepths[lockDepths.length - 1]) { lockDepths.pop(); lockStack.pop(); }
+            }
+          }
+        });
+        const seenPairs = new Set();
+        Object.keys(lockGraph).forEach((a) => {
+          Object.keys(lockGraph[a]).forEach((b) => {
+            if (lockGraph[b] && lockGraph[b][a]) {
+              const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+              if (!seenPairs.has(key)) {
+                seenPairs.add(key);
+                diags.push({ line: Math.min(lockGraph[a][b], lockGraph[b][a]), severity: 'ERROR', category: 'SEMANTIC', ruleId: 'CONC-001', title: `Lock-Ordering Deadlock (${a} <-> ${b})`, message: `Cause: Opposite nested lock orders '${a} -> ${b}' (Line ${lockGraph[a][b]}) vs '${b} -> ${a}' (Line ${lockGraph[b][a]}). Runtime Consequence: Permanent thread freeze / application hang as both threads wait forever!`, suggestion: `Always acquire '${a}' before '${b}' in the same global order across all threads.` });
+              }
+            }
+          });
+        });
+
+        // CONC-002: Unsynchronized shared counter mutation inside Thread / ExecutorService
+        let tDepth = 0, inTask = false, taskTarget = -1, inSync = false, syncTarget = -1;
+        const localVars = new Set();
+        lines.forEach((raw, idx) => {
+          const cur = raw.split('//')[0];
+          if (!inTask && /(?:\.(?:submit|execute)\s*\(|\bnew\s+Thread\s*\()/.test(cur) && cur.includes('{')) {
+            inTask = true; taskTarget = tDepth + 1; localVars.clear();
+          }
+          if (inTask && cur.includes('synchronized')) { inSync = true; syncTarget = tDepth + 1; }
+          if (inTask && !inSync) {
+            const mf = /\bfor\s*\(\s*(?:int|long)\s+([A-Za-z_]\w*)/.exec(cur);
+            if (mf) localVars.add(mf[1]);
+            const bodyOnly = cur.replace(/\bfor\s*\([^;]*;[^;]*;[^)]*\)/g, '');
+            const mm = /\b([A-Za-z_]\w*(?:\[[^\]]+\])?)\s*(\+\+|--|\+=|-=)/.exec(bodyOnly);
+            if (mm && !localVars.has(mm[1].split('[')[0])) {
+              diags.push({ line: idx + 1, severity: 'ERROR', category: 'SEMANTIC', ruleId: 'CONC-002', title: `Thread Data Race on Shared '${mm[1]}'`, message: `Cause: '${mm[1]}${mm[2]}' runs without synchronization inside a concurrent task. Runtime Consequence: Silent lost updates at runtime (final count is unpredictably lower than expected)!`, suggestion: 'Use AtomicInteger (incrementAndGet()) or synchronize updates.' });
+            }
+          }
+          for (const ch of cur) {
+            if (ch === '{') tDepth++;
+            else if (ch === '}') {
+              tDepth--;
+              if (inSync && tDepth < syncTarget) { inSync = false; syncTarget = -1; }
+              if (inTask && tDepth < taskTarget) { inTask = false; taskTarget = -1; localVars.clear(); }
+            }
+          }
+        });
+
         const methodComplexity = [];
         const mhRe = /^\s*(?:(?:public|private|protected|static|final)\s+)+[A-Za-z0-9_<>,\[\]\s]+\s+([A-Za-z_]\w*)\s*\([^)]*\)/;
         for (let i = 0; i < lines.length; i++) {
@@ -699,7 +845,7 @@ public class CleanBankAccount {
                   </div>
                   <span class="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge}">Line ${d.line}</span>
                 </div>
-                <p class="text-[11px] text-slate-600 leading-snug"><strong>Why:</strong> ${escapeHtml(d.message)}</p>
+                <p class="text-[11px] text-slate-600 leading-snug"><strong>Why:</strong> ${escapeHtml(d.message).replace('Runtime Consequence:', '<span class="block mt-1 font-bold text-rose-700">Runtime Consequence:</span>')}</p>
                 <div class="text-[11px] font-semibold text-emerald-800 bg-white/80 rounded-lg px-2.5 py-1.5 border border-emerald-200">
                   Fix: ${escapeHtml(d.suggestion)}
                 </div>

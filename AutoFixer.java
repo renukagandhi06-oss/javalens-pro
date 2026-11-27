@@ -160,6 +160,44 @@ public class AutoFixer {
         }
 
         String fixed = String.join("\n", lines);
+
+        // 9. Auto-generate missing hashCode() for any class overriding equals() without hashCode()
+        if (fixed.contains("boolean equals(") && !fixed.contains("int hashCode(")) {
+            Matcher flds = Pattern.compile("\b(?:int|long|double|float|boolean|String)\s+([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*;").matcher(fixed);
+            List<String> fieldNames = new ArrayList<>();
+            while (flds.find()) {
+                for (String part : flds.group(1).split(",")) {
+                    String fn = part.trim();
+                    if (!fn.isEmpty() && !"args".equals(fn) && !fieldNames.contains(fn) && fieldNames.size() < 4) {
+                        fieldNames.add(fn);
+                    }
+                }
+                if (!fieldNames.isEmpty()) break;
+            }
+            String hashArgs = fieldNames.isEmpty() ? "" : String.join(", ", fieldNames);
+            int eqIdx = fixed.indexOf("boolean equals(");
+            if (eqIdx > 0) {
+                int braceStart = fixed.indexOf("{", eqIdx);
+                if (braceStart > 0) {
+                    int depth = 0;
+                    int eqEnd = -1;
+                    for (int k = braceStart; k < fixed.length(); k++) {
+                        if (fixed.charAt(k) == '{') depth++;
+                        else if (fixed.charAt(k) == '}') {
+                            depth--;
+                            if (depth == 0) { eqEnd = k; break; }
+                        }
+                    }
+                    if (eqEnd > 0) {
+                        String hashMethod = "\n        @Override\n        public int hashCode() { return Objects.hash(" + hashArgs + "); }";
+                        fixed = fixed.substring(0, eqEnd + 1) + hashMethod + fixed.substring(eqEnd + 1);
+                        applied.add("Generated missing @Override hashCode() using Objects.hash(" + hashArgs + ") to fix HashMap/HashSet lookups.");
+                        addedObjectsUsage = true;
+                    }
+                }
+            }
+        }
+
         if (addedObjectsUsage && !fixed.contains("import java.util.")) {
             fixed = "import java.util.*;\n" + fixed;
             applied.add("Added 'import java.util.*;' for Objects.equals().");
