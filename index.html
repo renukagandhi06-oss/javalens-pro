@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JavaLens Pro — Beginner-Friendly Java Error Detector &amp; Code Suggestor</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background-color: #f4f7f5;
+      color: #0f172a;
+    }
+    .code-font { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .modal-backdrop { display: none; }
+    .modal-backdrop.open { display: flex; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+
+    /* Projector Dark Mode */
+    html.dark-theme body { background-color: #0b1220; color: #f1f5f9; }
+    html.dark-theme header { background-color: rgba(15, 23, 42, 0.96) !important; border-color: #1e293b !important; }
+    html.dark-theme .bg-white { background-color: #131f33 !important; }
+    html.dark-theme .bg-slate-50, html.dark-theme .bg-slate-100 { background-color: #1e293b !important; }
+    html.dark-theme .border-slate-200, html.dark-theme .border-slate-100 { border-color: #293850 !important; }
+    html.dark-theme .text-slate-900, html.dark-theme .text-slate-800 { color: #f8fafc !important; }
+    html.dark-theme .text-slate-700, html.dark-theme .text-slate-600 { color: #cbd5e1 !important; }
+    html.dark-theme .text-slate-500 { color: #94a3b8 !important; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Header (VanaRaksha-Style Clean & Friendly) -->
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-emerald-100 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+          <i data-lucide="code-2" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 truncate">JavaLens Pro</h1>
+            <span id="backend-badge" class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+              <span id="backend-dot" class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+              <span id="backend-label">Preview Mode</span>
+            </span>
+          </div>
+          <p class="text-[11px] sm:text-xs text-emerald-700 font-medium truncate">Java Error Detector, Code Suggestor &amp; Live Runner</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <button type="button" id="btn-open-dict" class="inline-flex items-center gap-1.5 bg-white hover:bg-emerald-50 border border-slate-200 text-emerald-700 text-xs font-semibold px-2.5 sm:px-3 py-2 rounded-xl shadow-sm transition" title="Beginner Java Error Dictionary">
+          <i data-lucide="book-open" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Error Guide</span>
+        </button>
+        <button type="button" id="btn-theme-toggle" class="inline-flex items-center justify-center bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 p-2 rounded-xl shadow-sm transition" title="Toggle Dark / Light Mode" aria-label="Toggle Dark Mode">
+          <i data-lucide="moon" class="w-4 h-4"></i>
+        </button>
+        <button type="button" id="btn-open-qr" class="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-sm transition" title="Show Projector Live QR">
+          <i data-lucide="qr-code" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Live QR</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 space-y-5">
+
+    <!-- Friendly 3-Step Hero Banner -->
+    <section class="rounded-2xl bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-700 text-white p-5 sm:p-6 shadow-sm space-y-4">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="space-y-1 max-w-2xl">
+          <div class="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-white/15 px-2.5 py-1 rounded-full">
+            <span class="w-2 h-2 rounded-full bg-emerald-300"></span>
+            <span>Powered by 11 Pure Java OOP Classes &amp; Real JDK javac API</span>
+          </div>
+          <h2 class="text-xl sm:text-2xl font-bold tracking-tight">Spot Java Mistakes in Plain English, Fix Them in 1 Tap, and Run Live</h2>
+          <p class="text-emerald-50/90 text-xs sm:text-sm">Built for beginners and VTU labs—no confusing compiler jargon. Pick a sample below or paste your own Java code to start.</p>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-center shrink-0">
+          <div class="rounded-xl bg-white/15 backdrop-blur px-3 py-2">
+            <div class="text-xs font-extrabold text-emerald-200">STEP 1</div>
+            <div class="text-[11px] font-semibold">Pick / Paste</div>
+          </div>
+          <div class="rounded-xl bg-white/15 backdrop-blur px-3 py-2">
+            <div class="text-xs font-extrabold text-emerald-200">STEP 2</div>
+            <div class="text-[11px] font-semibold">Check Errors</div>
+          </div>
+          <div class="rounded-xl bg-white/15 backdrop-blur px-3 py-2">
+            <div class="text-xs font-extrabold text-emerald-200">STEP 3</div>
+            <div class="text-[11px] font-semibold">Fix &amp; Run</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Big Beginner-Friendly Sample Pills -->
+      <div class="flex flex-wrap items-center gap-2 pt-1">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-200 mr-1">Try a Sample:</span>
+        <button type="button" data-preset="0" class="preset-pill px-3 py-1.5 rounded-xl bg-white text-emerald-900 text-xs font-bold shadow-sm transition">1. String &amp; Loop Bugs</button>
+        <button type="button" data-preset="1" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">2. Thread &amp; Catch Bugs</button>
+        <button type="button" data-preset="2" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">3. Array Crash Demo</button>
+        <button type="button" data-preset="3" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">4. Clean A+ Code</button>
+      </div>
+    </section>
+
+    <!-- Primary Action Bar -->
+    <section class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button" id="btn-analyze" class="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs sm:text-sm font-bold shadow-sm transition inline-flex items-center gap-1.5">
+          <i data-lucide="scan-search" class="w-4 h-4"></i>
+          <span>Check My Code</span>
+        </button>
+        <button type="button" id="btn-autofix" class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs sm:text-sm font-bold shadow-sm transition inline-flex items-center gap-1.5">
+          <i data-lucide="wand-2" class="w-4 h-4"></i>
+          <span>Auto-Fix All Bugs</span>
+        </button>
+        <button type="button" id="btn-run" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition inline-flex items-center gap-1.5">
+          <i data-lucide="play" class="w-4 h-4"></i>
+          <span>Run &amp; See Output</span>
+        </button>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5">
+        <label class="cursor-pointer px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition">
+          Upload .java
+          <input id="file-open-input" type="file" accept=".java,.txt" class="hidden" />
+        </label>
+        <button type="button" id="btn-download-java" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition">Save .java</button>
+        <button type="button" id="btn-export-report" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition">Export Report</button>
+        <button type="button" id="btn-zoom-out" class="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">A-</button>
+        <button type="button" id="btn-zoom-in" class="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">A+</button>
+      </div>
+    </section>
+
+    <!-- Main 2-Column Workspace -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+      <!-- Left: Code Editor + Output Terminal -->
+      <div class="lg:col-span-7 flex flex-col gap-5">
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
+          <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs font-bold text-slate-800">
+              <i data-lucide="file-code-2" class="w-4 h-4 text-emerald-600"></i>
+              <span id="active-class-label">StudentMarks.java</span>
+            </div>
+            <span class="text-[11px] text-slate-500">Tap any issue on the right to jump to its line</span>
+          </div>
+          <div class="flex relative min-h-[300px] max-h-[400px] bg-slate-950 text-slate-100">
+            <pre id="line-numbers" class="code-font select-none text-right px-3 py-3 text-xs leading-6 text-slate-500 bg-slate-900 border-r border-slate-800 overflow-hidden"></pre>
+            <textarea id="code-editor" spellcheck="false" aria-label="Java Source Code Editor" class="code-font flex-1 bg-transparent text-slate-100 text-sm leading-6 p-3 focus:outline-none resize-none overflow-auto whitespace-pre"></textarea>
+          </div>
+        </div>
+
+        <!-- Output Terminal -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs font-bold text-slate-800">
+              <i data-lucide="terminal" class="w-4 h-4 text-emerald-600"></i>
+              <span>Live Output Terminal &amp; Crash Explainer</span>
+            </div>
+            <span id="run-meta" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Ready</span>
+          </div>
+          <pre id="terminal-output" class="code-font text-xs leading-relaxed p-4 bg-slate-950 text-emerald-300 min-h-[130px] max-h-[210px] overflow-auto whitespace-pre-wrap">Tap "Run &amp; See Output" to compile and run your Java code here.</pre>
+        </div>
+      </div>
+
+      <!-- Right: Score Card + Beginner-Friendly Tabs -->
+      <div class="lg:col-span-5 flex flex-col gap-5">
+        <!-- Score Card -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Code Health Score</span>
+            <span id="health-grade-badge" class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">-- / 100</span>
+          </div>
+          <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+            <div id="health-bar-fill" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%;"></div>
+          </div>
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="rounded-xl bg-rose-50 border border-rose-100 p-2">
+              <div id="stat-errors" class="text-lg font-extrabold text-rose-600">0</div>
+              <div class="text-[10px] font-bold uppercase text-rose-700">Errors</div>
+            </div>
+            <div class="rounded-xl bg-amber-50 border border-amber-100 p-2">
+              <div id="stat-warnings" class="text-lg font-extrabold text-amber-600">0</div>
+              <div class="text-[10px] font-bold uppercase text-amber-700">Warnings</div>
+            </div>
+            <div class="rounded-xl bg-sky-50 border border-sky-100 p-2">
+              <div id="stat-complexity" class="text-lg font-extrabold text-sky-600">1</div>
+              <div class="text-[10px] font-bold uppercase text-sky-700">Complexity</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex-1 flex flex-col">
+          <div class="grid grid-cols-4 border-b border-slate-200 bg-slate-50 text-[11px] font-bold">
+            <button type="button" data-tab="diagnostics" class="tab-btn py-2.5 px-1 text-emerald-700 border-b-2 border-emerald-600 bg-white">Fixes</button>
+            <button type="button" data-tab="diff" class="tab-btn py-2.5 px-1 text-slate-500 hover:text-slate-800">Diff</button>
+            <button type="button" data-tab="metrics" class="tab-btn py-2.5 px-1 text-slate-500 hover:text-slate-800">OOP</button>
+            <button type="button" data-tab="architecture" class="tab-btn py-2.5 px-1 text-slate-500 hover:text-slate-800">Java Files</button>
+          </div>
+
+          <div id="panel-diagnostics" class="tab-view p-3.5 space-y-2.5 overflow-y-auto max-h-[380px]"></div>
+
+          <div id="panel-diff" class="tab-view hidden p-3.5 overflow-y-auto max-h-[380px]">
+            <pre id="diff-output" class="code-font text-xs leading-relaxed text-slate-700 whitespace-pre-wrap">Tap "Auto-Fix All Bugs" to see exact before-and-after line repairs.</pre>
+          </div>
+
+          <div id="panel-metrics" class="tab-view hidden p-4 space-y-3 overflow-y-auto max-h-[380px] text-xs">
+            <div id="metrics-details" class="space-y-2.5"></div>
+          </div>
+
+          <div id="panel-architecture" class="tab-view hidden p-3.5 space-y-2 overflow-y-auto max-h-[380px] text-xs">
+            <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-emerald-900">
+              <strong>11 Pure Java OOP Classes:</strong> All real compilation, static rules, Levenshtein typo math, auto-fixing, and JVM execution run in Pure Java using standard JDK 17.
+            </div>
+            <div class="space-y-1.5 text-slate-700">
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><strong class="text-emerald-800">CompilerEngine.java</strong> — In-memory <code>javax.tools.JavaCompiler</code> + plain-English error translator.</div>
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><strong class="text-emerald-800">StaticAnalyzer.java</strong> — 14 logic/OOP rules + Dynamic Programming Levenshtein typo detector.</div>
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><strong class="text-emerald-800">AutoFixer.java</strong> — One-click code repairer + line-by-line diff builder.</div>
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><strong class="text-emerald-800">CodeRunner.java</strong> — Sandboxed child-JVM executor (5s timeout) + Runtime Crash Explainer.</div>
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><strong class="text-emerald-800">CodeMetrics.java</strong> — Cyclomatic Complexity, Health Score (0–100), and OOP detector.</div>
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><strong class="text-emerald-800">JavaLensWebServer.java</strong> — Built-in JDK <code>HttpServer</code> powering this live web portal.</div>
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><strong class="text-emerald-800">JavaLensGUI.java &amp; JavaLensCLI.java</strong> — Pure Java Swing Desktop IDE + Terminal Studio.</div>
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><strong class="text-emerald-800">DiagnosticItem, BuggyPresets, JavaLensMain</strong> — Data models, enums &amp; cloud launcher.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL: BEGINNER JAVA ERROR DICTIONARY -->
+  <div id="modal-dict" class="modal-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto shadow-2xl border border-slate-200">
+      <div class="sticky top-0 bg-emerald-700 text-white px-5 py-4 flex items-center justify-between z-10">
+        <div>
+          <p class="text-[11px] uppercase tracking-wider font-semibold text-emerald-200">Beginner-Friendly VTU Reference</p>
+          <h3 class="text-base sm:text-lg font-extrabold">Common Java Errors Explained Simply</h3>
+        </div>
+        <button type="button" data-close="modal-dict" class="p-1.5 rounded-lg text-emerald-100 hover:bg-white/10"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-5 space-y-3">
+        <input id="dict-search" type="text" placeholder="Search an error (e.g., NullPointer, Array, ==, semicolon, Thread)..." class="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+        <div id="dict-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LIVE PROJECTOR QR -->
+  <div id="modal-qr" class="modal-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200 text-center">
+      <div class="bg-emerald-700 text-white px-5 py-4 flex items-center justify-between text-left">
+        <div>
+          <p class="text-[11px] uppercase tracking-wider font-semibold text-emerald-200">Live Viva Demo</p>
+          <h3 class="text-base font-extrabold">Scan to Open JavaLens Pro</h3>
+        </div>
+        <button type="button" data-close="modal-qr" class="p-1.5 rounded-lg text-emerald-100 hover:bg-white/10"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-6 space-y-4">
+        <div id="qr-box" class="mx-auto w-52 h-52 p-2.5 rounded-2xl border-2 border-emerald-200 bg-white flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"></div>
+        <p id="qr-url-text" class="text-[11px] font-mono text-emerald-700 break-all bg-emerald-50 px-2.5 py-1.5 rounded-lg"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container" class="fixed bottom-5 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const PRESETS = [
+`public class StudentMarks {
+    public static void main(String[] args) {
+        ArrayList<String> names = new ArrayList<>();
+        names.add("Girish");
+        String target = new String("Girish");
+        if (target == "Girish") {
+            Systm.out.pritnln("Student found!")
+        }
+        int[] marks = {88, 92, 95};
+        for (int i = 0; i <= marks.length; i++) {
+            System.out.println("Mark: " + marks[i]);
+        }
+    }
+}`,
+`class WorkerTask extends Thread {
+    public void run() {
+        System.out.println("Worker thread running: " + Thread.currentThread().getName());
+    }
+}
+
+public class ThreadDemo {
+    public static void main(String[] args) {
+        WorkerTask t1 = new WorkerTask();
+        t1.run();
+        try {
+            int x = 10 / 2;
+            System.out.println("Result: " + x);
+        } catch (Exception e) {}
+    }
+}`,
+`public class CrashDemo {
+    public static void main(String[] args) {
+        int[] scores = {75, 85, 95};
+        System.out.println("Starting array scan...");
+        for (int i = 0; i <= scores.length; i++) {
+            System.out.println("Score " + i + ": " + scores[i]);
+        }
+    }
+}`,
+`import java.util.*;
+
+public class CleanVtuDemo {
+    public static void main(String[] args) {
+        List<String> subjects = Arrays.asList("OOP with Java", "DSA", "OS");
+        System.out.println("=== VTU 3rd Sem CSE Subjects ===");
+        for (int i = 0; i < subjects.size(); i++) {
+            System.out.println((i + 1) + ". " + subjects.get(i));
+        }
+    }
+}`
+      ];
+
+      const ERROR_DICT = [
+        { name: 'String == Comparison Bug', why: 'Using == checks if two Strings sit at the same memory address, not if their words match.', fix: 'Use name.equals("Girish") instead of name == "Girish".', preset: 0 },
+        { name: 'ArrayIndexOutOfBoundsException', why: 'Arrays start at 0, so the last valid index is length - 1. Writing <= arr.length steps 1 past the end.', fix: 'Always use i < arr.length in your for-loop.', preset: 2 },
+        { name: 'Thread.run() vs Thread.start()', why: 'Calling t1.run() just runs normal code on the main thread without creating a new background thread.', fix: 'Call t1.start() so the JVM spawns a real concurrent thread.', preset: 1 },
+        { name: 'Missing import java.util.*;', why: 'Classes like Scanner, ArrayList, and HashMap live inside java.util and must be imported first.', fix: 'Add import java.util.*; at Line 1.', preset: 0 },
+        { name: 'Missing Semicolon (;)', why: 'Java needs a semicolon at the end of every statement so the compiler knows where one command stops.', fix: 'Place ; at the end of the highlighted line.', preset: 0 },
+        { name: 'Empty Catch Block', why: 'Leaving catch (Exception e) {} empty silently hides crashes and makes debugging impossible.', fix: 'Print the error inside catch: System.err.println(e.getMessage());', preset: 1 },
+        { name: 'NullPointerException', why: 'Happens when you call a method like s.length() on a variable that currently holds null.', fix: 'Initialize the variable or guard with if (s != null).', preset: 3 },
+        { name: 'Division by Zero (ArithmeticException)', why: 'Integer division by 0 is mathematically undefined and immediately crashes Java.', fix: 'Check if (b != 0) before dividing.', preset: 1 }
+      ];
+
+      const editor = document.getElementById('code-editor');
+      const lineNums = document.getElementById('line-numbers');
+      let fontSize = 13;
+      let javaServerOnline = false;
+      let lastReportData = null;
+
+      function showToast(msg) {
+        const box = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = 'px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold shadow-lg border border-emerald-500/40';
+        el.textContent = msg;
+        box.appendChild(el);
+        setTimeout(() => el.remove(), 2600);
+      }
+
+      async function checkJavaBackend() {
+        const host = window.location.hostname || '';
+        const proto = window.location.protocol || '';
+        if ((proto !== 'http:' && proto !== 'https:') || (!host.includes('localhost') && !host.includes('127.0.0.1') && !host.includes('onrender.com'))) {
+          return;
+        }
+        try {
+          const res = await fetch('/api/ping');
+          if (res.ok) {
+            javaServerOnline = true;
+            const badge = document.getElementById('backend-badge');
+            const dot = document.getElementById('backend-dot');
+            const lbl = document.getElementById('backend-label');
+            badge.className = 'inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0';
+            dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
+            lbl.textContent = 'Live Java JDK 17';
+          }
+        } catch (e) {}
+      }
+
+      function escapeHtml(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      function updateLineNumbers() {
+        const count = editor.value.split('\n').length;
+        let out = '';
+        for (let i = 1; i <= count; i++) out += i + '\n';
+        lineNums.textContent = out;
+        const m = editor.value.match(/\bpublic\s+class\s+([A-Za-z_][A-Za-z0-9_]*)/);
+        document.getElementById('active-class-label').textContent = (m ? m[1] : 'UserProgram') + '.java';
+      }
+
+      function localAnalyze(code) {
+        const diags = [];
+        const lines = code.split(/\r?\n/);
+        const usesUtil = /\b(Scanner|ArrayList|HashMap|Arrays|Collections|List)\b/.test(code);
+        if (usesUtil && !code.includes('import java.util.')) {
+          diags.push({ line: 1, column: 1, severity: 'ERROR', ruleId: 'JL-01', title: 'Missing java.util Import', message: 'You used a helper class like ArrayList or Scanner, but forgot to tell Java where to find it.', suggestion: "Add 'import java.util.*;' at Line 1 (Auto-Fix can do this for you)." });
+        }
+        let braces = 0;
+        lines.forEach((raw, idx) => {
+          const ln = idx + 1;
+          const t = raw.replace(/\/\/.*$/, '').trim();
+          if (!t) return;
+          for (const c of t) { if (c === '{') braces++; else if (c === '}') braces--; }
+          if (/("[^"]*"\s*(==|!=)|\b(==|!=)\s*"[^"]*")/.test(t)) {
+            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-02', title: 'Comparing Text with == Instead of .equals()', message: 'In Java, == compares memory locations, not actual words—so matching text can return false.', suggestion: 'Change target == "Girish" to target.equals("Girish").' });
+          }
+          if (/\b(for|while|if)\s*\([^)]*\)\s*;/.test(t)) {
+            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-03', title: 'Accidental Semicolon After Loop/If', message: 'A semicolon right after ) ends the loop early so the code below runs wrong.', suggestion: 'Delete the ; right after the closing ).' });
+          }
+          if (/<=\s*[A-Za-z_][A-Za-z0-9_]*\.length\b/.test(t)) {
+            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-05', title: 'Loop Goes 1 Step Past Array End', message: 'Java arrays start at 0, so <= length will crash with ArrayIndexOutOfBoundsException.', suggestion: "Change '<=' to '<' (e.g., i < marks.length)." });
+          }
+          if (/\b[A-Za-z_][A-Za-z0-9_]*\.run\s*\(\s*\)\s*;/.test(t) && (code.includes('extends Thread') || code.includes('new Thread'))) {
+            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-06', title: 'Called .run() Instead of .start()', message: 'Calling .run() does not create a new background thread—it runs on the main thread.', suggestion: "Replace '.run()' with '.start()' to run concurrently." });
+          }
+          if (/[/%]\s*0(?![0-9.])/.test(t)) {
+            diags.push({ line: ln, column: 1, severity: 'ERROR', ruleId: 'JL-07', title: 'Division by Zero', message: 'Dividing a whole number by 0 immediately crashes Java with ArithmeticException.', suggestion: 'Check that the divisor is not 0 before dividing.' });
+          }
+          if (/\bcatch\s*\([^)]*\)\s*\{\s*\}/.test(t)) {
+            diags.push({ line: ln, column: 1, severity: 'WARNING', ruleId: 'JL-08', title: 'Empty Catch Block Hides Errors', message: 'If something crashes inside try, this empty catch hides it silently.', suggestion: 'Add System.err.println(e.getMessage()); inside catch.' });
+          }
+          if (t.includes('Systm.') || t.includes('pritnln') || t.includes('printn(')) {
+            diags.push({ line: ln, column: 1, severity: 'ERROR', ruleId: 'JL-09', title: 'Spelling Typo in System.out.println', message: 'Java is strict about spelling—Systm or pritnln will not compile.', suggestion: "Fix spelling to 'System.out.println(...)'." });
+          }
+          if ((t.startsWith('System.out.print') || t.startsWith('Systm.out.') || t.startsWith('return ')) && !t.endsWith(';') && !t.endsWith('{') && !t.endsWith('}')) {
+            diags.push({ line: ln, column: raw.length, severity: 'ERROR', ruleId: 'JAVAC', title: 'Missing Semicolon (;)', message: 'Every Java statement must end with a semicolon so the compiler knows where it finishes.', suggestion: "Add ';' at the end of Line " + ln + '.' });
+          }
+          if (/new\s+String\s*\(\s*"[^"]*"\s*\)/.test(t)) {
+            diags.push({ line: ln, column: 1, severity: 'INFO', ruleId: 'JL-11', title: 'Extra new String() Not Needed', message: 'Writing new String("...") wastes memory instead of reusing Java’s String pool.', suggestion: 'Write String target = "Girish"; directly.' });
+          }
+        });
+        if (braces !== 0) {
+          diags.push({ line: lines.length, column: 1, severity: 'ERROR', ruleId: 'JL-14', title: 'Unmatched Curly Braces {}', message: 'Opening { and closing } counts do not match.', suggestion: 'Make sure every { has a matching }.' });
+        }
+
+        const decisions = (code.match(/\b(if|for|while|case|catch)\b|&&|\|\||\?/g) || []).length;
+        const complexity = 1 + decisions;
+        const errors = diags.filter((d) => d.severity === 'ERROR').length;
+        const warnings = diags.filter((d) => d.severity === 'WARNING').length;
+        const score = Math.max(0, Math.min(100, 100 - errors * 22 - warnings * 8 - Math.max(0, (complexity - 10) * 2)));
+        const grade = score >= 95 ? 'A+' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D';
+        const oop = [];
+        if (code.includes('private ')) oop.push('Encapsulation');
+        if (code.includes('extends ')) oop.push('Inheritance');
+        if (code.includes('implements ')) oop.push('Interfaces');
+        if (code.includes('try') && code.includes('catch')) oop.push('Exception Handling');
+        if (code.includes('Thread') || code.includes('Runnable')) oop.push('Multithreading');
+        if (/\b(ArrayList|HashMap|List|Map)\b/.test(code)) oop.push('Java Collections');
+        if (oop.length === 0) oop.push('Basic Class Structure');
+
+        return {
+          diagnostics: diags,
+          metrics: { totalLines: lines.length, codeLines: lines.filter((l) => l.trim()).length, classCount: (code.match(/\bclass\s+/g) || []).length, methodCount: (code.match(/\b(public|private|static)\s+[\w<>\[\]]+\s+[a-z]\w*\s*\(/g) || []).length, complexity, healthScore: score, healthGrade: grade, oopConcepts: oop }
+        };
+      }
+
+      function localAutoFix(original) {
+        let code = original;
+        const applied = [];
+        if (/\b(Scanner|ArrayList|HashMap|Arrays|List)\b/.test(code) && !code.includes('import java.util.')) {
+          code = 'import java.util.*;\n' + code;
+          applied.push("Added missing 'import java.util.*;' at Line 1.");
+        }
+        const lines = code.split(/\r?\n/).map((line, i) => {
+          let u = line;
+          if (u.includes('Systm.')) { u = u.replace(/Systm\./g, 'System.'); applied.push(`Line ${i + 1}: Fixed typo 'Systm.' -> 'System.'`); }
+          if (u.includes('pritnln')) { u = u.replace(/pritnln/g, 'println'); applied.push(`Line ${i + 1}: Fixed typo 'pritnln' -> 'println'`); }
+          if (/\b([A-Za-z_]\w*)\s*==\s*("[^"]*")/.test(u)) { u = u.replace(/\b([A-Za-z_]\w*)\s*==\s*("[^"]*")/g, '$1.equals($2)'); applied.push(`Line ${i + 1}: Replaced == with .equals()`); }
+          if (/<=\s*([A-Za-z_]\w*\.length)\b/.test(u)) { u = u.replace(/<=\s*([A-Za-z_]\w*\.length)\b/g, '< $1'); applied.push(`Line ${i + 1}: Fixed loop bound '<=' -> '<'`); }
+          if (code.includes('Thread') && /\.run\s*\(\s*\)\s*;/.test(u)) { u = u.replace(/\.run\s*\(\s*\)\s*;/g, '.start();'); applied.push(`Line ${i + 1}: Changed '.run()' -> '.start()'`); }
+          const tc = u.trim();
+          if ((tc.startsWith('System.out.print') || tc.startsWith('return ')) && !tc.endsWith(';') && !tc.endsWith('{') && !tc.endsWith('}')) {
+            u = u + ';';
+            applied.push(`Line ${i + 1}: Added missing trailing ';'`);
+          }
+          return u;
+        });
+        const fixedCode = lines.join('\n');
+        const bL = original.split(/\r?\n/), aL = fixedCode.split(/\r?\n/);
+        const diffLines = [];
+        const max = Math.max(bL.length, aL.length);
+        for (let i = 0; i < max; i++) {
+          if (bL[i] === aL[i]) diffLines.push(`  ${String(i + 1).padStart(2)} | ${aL[i] || ''}`);
+          else {
+            if (bL[i] !== undefined) diffLines.push(`- ${String(i + 1).padStart(2)} | ${bL[i]}`);
+            if (aL[i] !== undefined) diffLines.push(`+ ${String(i + 1).padStart(2)} | ${aL[i]}`);
+          }
+        }
+        return { fixedCode, appliedFixes: applied, diffLines };
+      }
+
+      function renderAnalysis(data) {
+        lastReportData = data;
+        const diags = data.diagnostics || [];
+        const m = data.metrics || {};
+        const errs = diags.filter((d) => d.severity === 'ERROR').length;
+        const warns = diags.filter((d) => d.severity === 'WARNING').length;
+
+        document.getElementById('stat-errors').textContent = errs;
+        document.getElementById('stat-warnings').textContent = warns;
+        document.getElementById('stat-complexity').textContent = m.complexity || 1;
+        document.getElementById('health-grade-badge').textContent = `${m.healthScore || 0} / 100 (${m.healthGrade || 'A'})`;
+        const bar = document.getElementById('health-bar-fill');
+        bar.style.width = `${m.healthScore || 0}%`;
+        bar.className = `h-full transition-all duration-300 ${m.healthScore >= 85 ? 'bg-emerald-500' : m.healthScore >= 60 ? 'bg-amber-400' : 'bg-rose-500'}`;
+
+        const panel = document.getElementById('panel-diagnostics');
+        if (diags.length === 0) {
+          panel.innerHTML = `<div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold text-center">Awesome! Zero errors or warnings found—tap "Run &amp; See Output" to test it live.</div>`;
+        } else {
+          panel.innerHTML = diags.map((d) => {
+            const cls = d.severity === 'ERROR'
+              ? 'border-rose-200 bg-rose-50/70'
+              : d.severity === 'WARNING'
+                ? 'border-amber-200 bg-amber-50/70'
+                : 'border-sky-200 bg-sky-50/70';
+            const badge = d.severity === 'ERROR'
+              ? 'bg-rose-600 text-white'
+              : d.severity === 'WARNING'
+                ? 'bg-amber-500 text-white'
+                : 'bg-sky-600 text-white';
+            return `
+              <button type="button" data-jump-line="${d.line}" class="w-full text-left p-3 rounded-xl border ${cls} hover:shadow-sm transition space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-extrabold text-slate-900">${escapeHtml(d.title)}</span>
+                  <span class="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge}">Line ${d.line}</span>
+                </div>
+                <p class="text-[11px] text-slate-600 leading-snug"><strong>Why:</strong> ${escapeHtml(d.message)}</p>
+                <div class="text-[11px] font-semibold text-emerald-800 bg-white/80 rounded-lg px-2.5 py-1.5 border border-emerald-200">
+                  Fix: ${escapeHtml(d.suggestion)}
+                </div>
+              </button>
+            `;
+          }).join('');
+        }
+
+        document.getElementById('metrics-details').innerHTML = `
+          <div class="grid grid-cols-2 gap-2">
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><span class="text-slate-500 block text-[10px]">Total Lines</span><strong class="text-slate-900 text-sm">${m.totalLines || 0}</strong></div>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><span class="text-slate-500 block text-[10px]">Classes</span><strong class="text-slate-900 text-sm">${m.classCount || 0}</strong></div>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><span class="text-slate-500 block text-[10px]">Methods</span><strong class="text-slate-900 text-sm">${m.methodCount || 0}</strong></div>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100"><span class="text-slate-500 block text-[10px]">Cyclomatic Complexity</span><strong class="text-sky-700 text-sm">${m.complexity || 1}</strong></div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+            <div class="text-[10px] font-bold uppercase text-slate-500">OOP Concepts Detected</div>
+            <div class="flex flex-wrap gap-1.5">${(m.oopConcepts || []).map((c) => `<span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-semibold">${escapeHtml(c)}</span>`).join('')}</div>
+          </div>
+        `;
+      }
+
+      async function runAnalyze() {
+        const code = editor.value;
+        if (javaServerOnline) {
+          try {
+            const res = await fetch('/api/analyze', { method: 'POST', body: code });
+            if (res.ok) { renderAnalysis(await res.json()); return; }
+          } catch (e) {}
+        }
+        renderAnalysis(localAnalyze(code));
+      }
+
+      async function runAutoFix() {
+        const code = editor.value;
+        let data = null;
+        if (javaServerOnline) {
+          try {
+            const res = await fetch('/api/autofix', { method: 'POST', body: code });
+            if (res.ok) data = await res.json();
+          } catch (e) {}
+        }
+        if (!data) data = localAutoFix(code);
+        editor.value = data.fixedCode;
+        updateLineNumbers();
+        document.getElementById('diff-output').textContent =
+          (data.appliedFixes.length ? 'Applied Repairs:\n  - ' + data.appliedFixes.join('\n  - ') + '\n\n' : 'No automatic repairs needed.\n\n')
+          + data.diffLines.join('\n');
+        switchTab('diff');
+        showToast(data.appliedFixes.length ? `Fixed ${data.appliedFixes.length} issue(s) automatically!` : 'Code is already clean!');
+        runAnalyze();
+      }
+
+      async function runCode() {
+        const term = document.getElementById('terminal-output');
+        const meta = document.getElementById('run-meta');
+        const code = editor.value;
+
+        if (javaServerOnline) {
+          term.textContent = 'Compiling & running on live Java JDK 17 server...';
+          try {
+            const res = await fetch('/api/run', { method: 'POST', body: code });
+            const rr = await res.json();
+            let out = '';
+            if (rr.stdout) out += rr.stdout + '\n';
+            if (rr.stderr) out += '[STDERR]\n' + rr.stderr + '\n';
+            if (rr.crashDiagnosis) out += '>> ' + rr.crashDiagnosis + '\n';
+            term.textContent = out.trim() || '(Program exited cleanly with no output)';
+            meta.textContent = `Exit ${rr.exitCode} · ${rr.elapsedMs} ms (Live JDK)`;
+            return;
+          } catch (e) {}
+        }
+
+        const check = localAnalyze(code);
+        const errs = check.diagnostics.filter((d) => d.severity === 'ERROR');
+        if (errs.length > 0) {
+          term.textContent = `Could not compile (${errs.length} error(s) found):\n`
+            + errs.map((e) => `  Line ${e.line}: ${e.title} -> ${e.suggestion}`).join('\n')
+            + '\n\nTip: Tap "Auto-Fix All Bugs" above to fix these in 1 click!';
+          meta.textContent = 'Compile Blocked';
+          return;
+        }
+        if (/<=\s*[A-Za-z_]\w*\.length\b/.test(code)) {
+          term.textContent = `Starting array scan...\n[RUNTIME CRASH] java.lang.ArrayIndexOutOfBoundsException\n>> Plain-English Fix: Your loop uses <= array.length. Change <= to < (or tap Auto-Fix All Bugs).`;
+          meta.textContent = 'Runtime Crash';
+          return;
+        }
+        const prints = [];
+        const re = /System\.out\.println\s*\(\s*"([^"]*)"\s*\)/g;
+        let m;
+        while ((m = re.exec(code)) !== null) prints.push(m[1]);
+        term.textContent = (prints.length ? prints.join('\n') : 'Compiled cleanly with 0 errors!')
+          + '\n\n[Preview Mode — Deploy to Render.com to run live on OpenJDK 17]';
+        meta.textContent = 'Exit 0 (Preview)';
+      }
+
+      function switchTab(name) {
+        document.querySelectorAll('.tab-view').forEach((v) => v.classList.add('hidden'));
+        document.getElementById('panel-' + name).classList.remove('hidden');
+        document.querySelectorAll('.tab-btn').forEach((b) => {
+          const active = b.dataset.tab === name;
+          b.className = active
+            ? 'tab-btn py-2.5 px-1 text-emerald-700 border-b-2 border-emerald-600 bg-white'
+            : 'tab-btn py-2.5 px-1 text-slate-500 hover:text-slate-800';
+        });
+      }
+
+      function renderDict(filter) {
+        const q = (filter || '').toLowerCase();
+        const items = ERROR_DICT.filter((e) => !q || e.name.toLowerCase().includes(q) || e.why.toLowerCase().includes(q));
+        document.getElementById('dict-list').innerHTML = items.map((e) => `
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex flex-col justify-between gap-2">
+            <div class="space-y-1">
+              <div class="font-bold text-slate-900 text-sm">${escapeHtml(e.name)}</div>
+              <p class="text-slate-600"><strong>Why:</strong> ${escapeHtml(e.why)}</p>
+              <p class="text-emerald-800 font-semibold"><strong>Fix:</strong> ${escapeHtml(e.fix)}</p>
+            </div>
+            <button type="button" data-try-preset="${e.preset}" class="self-start px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition">Try Example</button>
+          </div>
+        `).join('');
+      }
+
+      function selectPreset(idx) {
+        editor.value = PRESETS[idx] || PRESETS[0];
+        document.querySelectorAll('.preset-pill').forEach((b) => {
+          const active = Number(b.dataset.preset) === idx;
+          b.className = active
+            ? 'preset-pill px-3 py-1.5 rounded-xl bg-white text-emerald-900 text-xs font-bold shadow-sm transition'
+            : 'preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition';
+        });
+        updateLineNumbers();
+        runAnalyze();
+      }
+
+      // Wire events
+      editor.addEventListener('input', updateLineNumbers);
+      editor.addEventListener('scroll', () => { lineNums.scrollTop = editor.scrollTop; });
+      document.querySelectorAll('.preset-pill').forEach((b) => {
+        b.addEventListener('click', () => selectPreset(Number(b.dataset.preset)));
+      });
+      document.getElementById('btn-analyze').addEventListener('click', () => { runAnalyze(); showToast('Code checked!'); });
+      document.getElementById('btn-autofix').addEventListener('click', runAutoFix);
+      document.getElementById('btn-run').addEventListener('click', runCode);
+      document.getElementById('btn-zoom-in').addEventListener('click', () => { fontSize = Math.min(22, fontSize + 2); editor.style.fontSize = fontSize + 'px'; lineNums.style.fontSize = fontSize + 'px'; });
+      document.getElementById('btn-zoom-out').addEventListener('click', () => { fontSize = Math.max(10, fontSize - 2); editor.style.fontSize = fontSize + 'px'; lineNums.style.fontSize = fontSize + 'px'; });
+      document.getElementById('btn-theme-toggle').addEventListener('click', () => {
+        document.documentElement.classList.toggle('dark-theme');
+      });
+      document.getElementById('btn-open-dict').addEventListener('click', () => {
+        renderDict('');
+        document.getElementById('modal-dict').classList.add('open');
+      });
+      document.getElementById('dict-search').addEventListener('input', (e) => renderDict(e.target.value));
+      document.getElementById('dict-list').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-try-preset]');
+        if (!b) return;
+        document.getElementById('modal-dict').classList.remove('open');
+        selectPreset(Number(b.dataset.tryPreset));
+      });
+      document.getElementById('btn-open-qr').addEventListener('click', () => {
+        const url = window.location.href.startsWith('http') ? window.location.href : 'https://javalens-pro.onrender.com';
+        document.getElementById('qr-url-text').textContent = url;
+        const box = document.getElementById('qr-box');
+        if (typeof qrcode === 'function') {
+          const qr = qrcode(0, 'M');
+          qr.addData(url);
+          qr.make();
+          box.innerHTML = qr.createSvgTag(4, 2);
+        }
+        document.getElementById('modal-qr').classList.add('open');
+      });
+      document.querySelectorAll('[data-close]').forEach((b) => {
+        b.addEventListener('click', () => document.getElementById(b.dataset.close).classList.remove('open'));
+      });
+      document.getElementById('file-open-input').addEventListener('change', (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = (ev) => { editor.value = ev.target.result || ''; updateLineNumbers(); runAnalyze(); };
+        r.readAsText(f);
+      });
+      document.getElementById('btn-download-java').addEventListener('click', () => {
+        const blob = new Blob([editor.value], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = document.getElementById('active-class-label').textContent;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+      document.getElementById('btn-export-report').addEventListener('click', () => {
+        const d = lastReportData || localAnalyze(editor.value);
+        const lines = [
+          'JavaLens Pro — Code Audit Report',
+          `Health Score: ${d.metrics.healthScore}/100 (${d.metrics.healthGrade}) | Complexity: ${d.metrics.complexity}`,
+          `OOP Concepts: ${(d.metrics.oopConcepts || []).join(', ')}`,
+          '',
+          `Issues Found (${d.diagnostics.length}):`,
+          ...d.diagnostics.map((x) => `  - [${x.severity}] Line ${x.line}: ${x.title} -> ${x.suggestion}`)
+        ];
+        const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'JavaLens_Audit_Report.txt';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast('Audit report downloaded!');
+      });
+      document.querySelectorAll('.tab-btn').forEach((b) => {
+        b.addEventListener('click', () => switchTab(b.dataset.tab));
+      });
+      document.getElementById('panel-diagnostics').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-jump-line]');
+        if (!btn) return;
+        const targetLine = Number(btn.dataset.jumpLine) || 1;
+        const lines = editor.value.split('\n');
+        let pos = 0;
+        for (let i = 0; i < Math.min(targetLine - 1, lines.length); i++) pos += lines[i].length + 1;
+        editor.focus();
+        editor.setSelectionRange(pos, pos + (lines[targetLine - 1] || '').length);
+      });
+
+      // Init
+      selectPreset(0);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      checkJavaBackend().then(runAnalyze);
+    })();
+  </script>
+</body>
+</html>
