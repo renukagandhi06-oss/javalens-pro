@@ -4,18 +4,23 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * JavaLens Pro - Live Output Terminal, Interactive Stdin & Root-Cause Correlated Debugger
  * Compiles user Java code to a temp directory, executes it in a child JVM with a 5s safety timeout,
  * drains stdout/stderr concurrently on daemon threads, feeds optional stdin, and correlates live
- * runtime symptoms (Map: null, unexpected false, NaN, wrong thread counters, deadlocks) directly
- * back to exact root causes detected by ConcurrencyAnalyzer and SemanticAnalyzer.
+ * runtime symptoms (negative integer overflow, infinite loop timeout, Map: null, unexpected false,
+ * NaN, wrong thread counters, deadlocks) directly back to exact root causes across our 16-class engine.
  */
 public class CodeRunner {
 
     private final ConcurrencyAnalyzer concurrencyAnalyzer = new ConcurrencyAnalyzer();
     private final SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer();
+    private final DeepBugAnalyzer deepBugAnalyzer = new DeepBugAnalyzer();
+    private final SecurityScanner securityScanner = new SecurityScanner();
+
+    private static final Pattern NEGATIVE_INT_OUT = Pattern.compile("(?<![A-Za-z0-9_])-\\d{4,}");
 
     public static class RunResult {
         public final boolean compiled;
@@ -99,11 +104,12 @@ public class CodeRunner {
             long elapsed = System.currentTimeMillis() - start;
 
             if (!finished) {
+                String stackHint = captureJstackSummary(proc);
                 proc.destroyForcibly();
                 joinQuietly(outThread, 300);
                 joinQuietly(errThread, 300);
                 String partialOut = new String(outBuf.toByteArray(), StandardCharsets.UTF_8);
-                String correlated = correlateOutputWithRootCauses(sourceCode, partialOut, "", true);
+                String correlated = correlateOutputWithRootCauses(sourceCode, partialOut, stackHint, true);
                 return new RunResult(true, -1, elapsed, partialOut,
                         "Execution timed out after 5 seconds (possible Deadlock or Infinite Loop).",
                         correlated);
@@ -126,8 +132,37 @@ public class CodeRunner {
     }
 
     /**
-     * Correlates live runtime symptoms (null, false, NaN, wrong counts, 5s timeout)
-     * directly back to static/semantic/concurrency root causes so users see BOTH symptom and cause.
+     * Attempts a lightweight jstack snapshot on timeout to identify the exact stuck line in user code.
+     */
+    private static String captureJstackSummary(Process proc) {
+        try {
+            long pid = proc.pid();
+            String jstackBin = System.getProperty("java.home") + File.separator + "bin" + File.separator + "jstack";
+            if (!new File(jstackBin).exists()) return "";
+            Process js = new ProcessBuilder(jstackBin, String.valueOf(pid)).start();
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
+            Thread drainer = startStreamDrainer(js.getInputStream(), buf);
+            if (js.waitFor(1200, TimeUnit.MILLISECONDS)) {
+                joinQuietly(drainer, 300);
+                String dump = new String(buf.toByteArray(), StandardCharsets.UTF_8);
+                if (dump.contains("Found one Java-level deadlock")) {
+                    return "JVM Thread Dump (jstack): Confirmed Java-level Deadlock detected in child JVM!";
+                }
+                for (String line : dump.split("\\r?\\n")) {
+                    if (line.trim().startsWith("at ") && !line.contains("java.") && !line.contains("jdk.")) {
+                        return "JVM Thread Dump (jstack): Thread stuck " + line.trim();
+                    }
+                }
+            } else {
+                js.destroyForcibly();
+            }
+        } catch (Exception ignored) {}
+        return "";
+    }
+
+    /**
+     * Correlates live runtime symptoms (negative overflow, timeout/infinite loop, null, false, NaN, wrong counts)
+     * directly back to static/semantic/concurrency/deep root causes so ALL bugs are surfaced.
      */
     private String correlateOutputWithRootCauses(String sourceCode, String stdout,
                                                  String baseDiagnosis, boolean timedOut) {
@@ -137,23 +172,38 @@ public class CodeRunner {
         }
 
         List<DiagnosticItem> analyzed = new ArrayList<>();
+        analyzed.addAll(deepBugAnalyzer.analyze(sourceCode));
         analyzed.addAll(concurrencyAnalyzer.analyze(sourceCode));
         analyzed.addAll(semanticAnalyzer.analyze(sourceCode));
+        analyzed.addAll(securityScanner.scan(sourceCode));
 
         String outLower = stdout == null ? "" : stdout.toLowerCase(Locale.ENGLISH);
-        boolean foundDeadlockCause = false;
+        boolean explainedTimeout = false;
 
         for (DiagnosticItem d : analyzed) {
             String id = d.getRuleId();
 
-            if ("SEM-007".equals(id) && (outLower.contains("null") || outLower.contains("false"))) {
+            if ("OVF-001".equals(id)) {
+                String tag = (stdout != null && NEGATIVE_INT_OUT.matcher(stdout).find())
+                        ? "Confirmed IntegerOverflow (Negative/Wrapped Output)"
+                        : "IntegerOverflow Risk";
+                notes.add("Root-Cause Link (" + tag + ") [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            } else if ("LOOP-001".equals(id)) {
+                if (timedOut) explainedTimeout = true;
+                notes.add("Root-Cause Link (Confirmed InfiniteLoop Timeout) [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            } else if ("CONC-003".equals(id) || "CONC-004".equals(id) || "SEC-003".equals(id)) {
+                notes.add("Root-Cause Link (" + d.getTitle() + ") [Line " + d.getLine() + "]: "
+                        + d.getMessage() + " Fix: " + d.getSuggestion());
+            } else if ("SEM-007".equals(id) && (outLower.contains("null") || outLower.contains("false"))) {
                 notes.add("Root-Cause Link (Map/Set returned null or false) [Line " + d.getLine() + "]: "
                         + d.getMessage() + " Fix: " + d.getSuggestion());
             } else if ("CONC-002".equals(id)) {
                 notes.add("Root-Cause Link (Corrupted / Lost Count) [Line " + d.getLine() + "]: "
                         + d.getMessage() + " Fix: " + d.getSuggestion());
             } else if ("CONC-001".equals(id) && timedOut) {
-                foundDeadlockCause = true;
+                explainedTimeout = true;
                 notes.add("Root-Cause Link (Confirmed Deadlock Timeout) [Line " + d.getLine() + "]: "
                         + d.getMessage() + " Fix: " + d.getSuggestion());
             } else if ("SEM-001".equals(id) && outLower.contains("false")) {
@@ -168,7 +218,7 @@ public class CodeRunner {
             }
         }
 
-        if (timedOut && !foundDeadlockCause) {
+        if (timedOut && !explainedTimeout) {
             notes.add("Runtime Fix (Timeout / Deadlock): Program hung for >5 seconds. Check for circular synchronized locks (deadlock) or an infinite while/for loop.");
         }
 

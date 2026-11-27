@@ -104,6 +104,7 @@
         <button type="button" data-preset="2" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Security &amp; Leaks</button>
         <button type="button" data-preset="3" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Scanner Input</button>
         <button type="button" data-preset="4" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Concurrency &amp; Hash</button>
+        <button type="button" data-preset="6" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Deep Stress Test</button>
         <button type="button" data-preset="5" class="preset-pill px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">Clean Benchmark</button>
         <button type="button" id="btn-blank-editor" class="px-3 py-1.5 rounded-xl bg-slate-900/50 hover:bg-slate-900/70 border border-white/20 text-white text-xs font-semibold transition">+ Blank Editor</button>
       </div>
@@ -185,11 +186,23 @@
       <!-- Right: Score Card + 3 Clean Product Tabs -->
       <div class="lg:col-span-5 flex flex-col gap-5">
         <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Code Health Score</span>
-            <span id="health-grade-badge" class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">-- / 100</span>
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="relative w-14 h-14 shrink-0">
+                <svg class="w-14 h-14 -rotate-90" viewBox="0 0 48 48">
+                  <circle cx="24" cy="24" r="20" fill="none" stroke="#e2e8f0" stroke-width="5"></circle>
+                  <circle id="health-ring-fill" cx="24" cy="24" r="20" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round" stroke-dasharray="125.66" stroke-dashoffset="125.66" style="transition: stroke-dashoffset 0.45s ease, stroke 0.3s ease;"></circle>
+                </svg>
+                <span id="health-ring-text" class="absolute inset-0 flex items-center justify-center text-xs font-extrabold text-slate-900">--</span>
+              </div>
+              <div>
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 block">Code Health Score</span>
+                <span id="health-grade-badge" class="inline-block mt-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">-- / 100</span>
+              </div>
+            </div>
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600">16 OOP Classes</span>
           </div>
-          <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
             <div id="health-bar-fill" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%;"></div>
           </div>
           <div class="grid grid-cols-3 gap-2 text-center">
@@ -215,7 +228,15 @@
             <button type="button" data-tab="metrics" class="tab-btn py-2.5 px-2 text-slate-500 hover:text-slate-800">Complexity &amp; OOP</button>
           </div>
 
-          <div id="panel-diagnostics" class="tab-view p-3.5 space-y-2.5 overflow-y-auto max-h-[380px]"></div>
+          <div id="panel-diagnostics" class="tab-view flex flex-col max-h-[420px]">
+            <div id="diag-filters" class="px-3.5 pt-3 pb-2 flex flex-wrap items-center gap-1.5 border-b border-slate-100 bg-slate-50/60">
+              <button type="button" data-sev-filter="ALL" class="sev-pill px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold transition">All</button>
+              <button type="button" data-sev-filter="ERROR" class="sev-pill px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 text-[11px] font-bold transition">Errors</button>
+              <button type="button" data-sev-filter="WARNING" class="sev-pill px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 text-[11px] font-bold transition">Warnings</button>
+              <button type="button" data-sev-filter="INFO" class="sev-pill px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 text-[11px] font-bold transition">Info</button>
+            </div>
+            <div id="diag-list" class="p-3.5 space-y-2.5 overflow-y-auto flex-1"></div>
+          </div>
 
           <div id="panel-diff" class="tab-view hidden p-3.5 overflow-y-auto max-h-[380px]">
             <pre id="diff-output" class="code-font text-xs leading-relaxed text-slate-700 whitespace-pre-wrap">Tap "Auto-Fix All" to see exact before-and-after line repairs.</pre>
@@ -227,6 +248,14 @@
         </div>
       </div>
     </section>
+    <footer class="pt-1 pb-4 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span class="font-semibold text-slate-700">JavaLens Pro Engine</span>
+        <span>· 16 Pure Java OOP Classes · OpenJDK 17 · Zero External JARs</span>
+      </div>
+      <span>Static + Semantic + Concurrency + Live Runtime Correlator</span>
+    </footer>
   </main>
 
   <!-- MODAL: BEGINNER JAVA ERROR GUIDE (Clear Close Button + Backdrop Close!) -->
@@ -425,6 +454,54 @@ public class CleanBankAccount {
         acc.deposit(500.0);
         System.out.println("Account ready for " + acc.owner + ": Rs." + acc.balance);
     }
+}`,
+`import java.io.*;
+import java.util.*;
+import java.util.concurrent.*;
+
+public class DeepStressTest {
+    private static DeepStressTest instance;
+
+    public static DeepStressTest getInstance() {
+        if (instance == null) {
+            synchronized (DeepStressTest.class) {
+                if (instance == null) {
+                    instance = new DeepStressTest();
+                }
+            }
+        }
+        return instance;
+    }
+
+    public static int binarySearchBug(int[] a, int target) {
+        int lo = 0, hi = a.length - 1;
+        while (lo < hi) {
+            int mid = (lo + hi) / 2;
+            if (a[mid] < target) lo = mid;
+            else hi = mid;
+        }
+        return lo;
+    }
+
+    public static void main(String[] args) throws Exception {
+        int result = 1;
+        for (int i = 0; i < 25; i++) {
+            result *= 3;
+        }
+        System.out.println("Overflowed result: " + result);
+
+        Map<String, Integer> cache = new HashMap<>();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        pool.submit(() -> {
+            if (!cache.containsKey("k")) {
+                cache.put("k", 42);
+            }
+        });
+        pool.shutdown();
+
+        FileInputStream fis = new FileInputStream("test.txt");
+        System.out.println(binarySearchBug(new int[]{1, 3, 5}, 5));
+    }
 }`
       ];
 
@@ -572,7 +649,7 @@ public class CleanBankAccount {
           if (/\bString\s+[A-Za-z0-9_]*(?:password|secret|apiKey|token)[A-Za-z0-9_]*\s*=\s*"[^"]{3,}"/i.test(s)) {
             diags.push({ line: ln, severity: 'WARNING', category: 'SECURITY', ruleId: 'SEC-002', title: 'Hardcoded Secret or Credential', message: 'Hardcoding API keys or passwords in source code exposes them in Git.', suggestion: 'Read secrets from System.getenv("API_KEY") instead.' });
           }
-          const mres = /\b(Scanner|FileReader|BufferedReader)\s+([A-Za-z_]\w*)\s*=\s*new\s+/.exec(s);
+          const mres = /\b(Scanner|FileReader|FileWriter|BufferedReader|BufferedWriter|FileInputStream|FileOutputStream|Socket|Connection)\s+([A-Za-z_]\w*)\s*=\s*new\s+/.exec(s);
           if (mres && !t.startsWith('try') && !s.includes('try (') && !code.includes(mres[2] + '.close()')) {
             diags.push({ line: ln, severity: 'WARNING', category: 'SECURITY', ruleId: 'SEC-003', title: `Unclosed Resource Leak (${mres[1]})`, message: `${mres[2]} is opened without .close() or try-with-resources.`, suggestion: `Wrap in try (${mres[1]} ${mres[2]} = new ...) { ... }.` });
           }
@@ -673,6 +750,63 @@ public class CleanBankAccount {
             }
           }
         });
+
+        // OVF-001: IntegerOverflow in multiplicative loops
+        const intInits = {};
+        lines.forEach((raw) => {
+          const m = /\bint\s+([A-Za-z_]\w*)\s*(?:=\s*([^;]+))?\s*;/.exec(raw.split('//')[0]);
+          if (m) intInits[m[1]] = Number((m[2] || '1').trim()) || 1;
+        });
+        lines.forEach((raw, idx) => {
+          const s = raw.split('//')[0];
+          const mo = /\b([A-Za-z_]\w*)\s*\*=\s*(\d+)/.exec(s);
+          if (mo && intInits[mo[1]] !== undefined) {
+            diags.push({ line: idx + 1, severity: 'ERROR', category: 'SEMANTIC', ruleId: 'OVF-001', title: `IntegerOverflow on '${mo[1]}'`, message: `Cause: 32-bit int '${mo[1]}' is multiplied by ${mo[2]} inside a loop without overflow checks. Runtime Consequence: Silently exceeds Integer.MAX_VALUE (2^31-1) and wraps into wrong/negative numbers!`, suggestion: `Change '${mo[1]}' to long or BigInteger, or use Math.multiplyExact(${mo[1]}, ${mo[2]}).` });
+          }
+        });
+
+        // LOOP-001: Binary Search InfiniteLoop (lo = mid)
+        for (let i = 0; i < lines.length; i++) {
+          const mw = /\bwhile\s*\(\s*([A-Za-z_]\w*)\s*<\s*([A-Za-z_]\w*)\s*\)/.exec(lines[i].split('//')[0]);
+          if (!mw) continue;
+          const loV = mw[1], hiV = mw[2];
+          let d = 0, ent = false, midV = null;
+          for (let j = i; j < lines.length; j++) {
+            const cur = lines[j].split('//')[0];
+            if (j > i && ent) {
+              const mm = /\b([A-Za-z_]\w*)\s*=\s*\(\s*[A-Za-z_]\w*\s*\+\s*[A-Za-z_]\w*\s*\)\s*(?:\/\s*2|>>>\s*1)/.exec(cur);
+              if (mm) midV = mm[1];
+              if (midV && new RegExp(`\\b${loV}\\s*=\\s*${midV}\\s*;`).test(cur)) {
+                diags.push({ line: j + 1, severity: 'ERROR', category: 'SEMANTIC', ruleId: 'LOOP-001', title: `InfiniteLoop (Binary Search Stagnation on '${loV}')`, message: `Cause: '${loV} = ${midV};' inside 'while (${loV} < ${hiV})'. Runtime Consequence: When ${loV} + 1 == ${hiV}, ${midV} equals ${loV} so '${loV}' stagnates forever (infinite hang)!`, suggestion: `Change '${loV} = ${midV};' to '${loV} = ${midV} + 1;'.` });
+              }
+            }
+            for (const ch of cur) { if (ch === '{') { d++; ent = true; } else if (ch === '}') d--; }
+            if (ent && d === 0) break;
+          }
+        }
+
+        // CONC-003: DCLWithoutVolatile
+        for (let i = 0; i < lines.length; i++) {
+          const m1 = /\bif\s*\(\s*([A-Za-z_]\w*)\s*==\s*null\s*\)/.exec(lines[i].split('//')[0]);
+          if (!m1) continue;
+          const fld = m1[1];
+          const win = lines.slice(i + 1, Math.min(lines.length, i + 10)).join('\n');
+          if (win.includes('synchronized') && win.includes(`${fld} == null`) && !new RegExp(`volatile\\s+[A-Za-z0-9_<>]+\\s+${fld}\\b`).test(code)) {
+            diags.push({ line: i + 1, severity: 'ERROR', category: 'SEMANTIC', ruleId: 'CONC-003', title: `DCLWithoutVolatile on '${fld}'`, message: `Cause: Double-Checked Locking on '${fld}' without 'volatile'. Runtime Consequence: Another thread can observe a half-constructed object due to JVM instruction reordering!`, suggestion: `Declare '${fld}' as private static volatile.` });
+            break;
+          }
+        }
+
+        // CONC-004: CheckThenActRace
+        for (let i = 0; i < lines.length; i++) {
+          const mc = /\b([A-Za-z_]\w*)\s*\.\s*(?:containsKey|get)\s*\(/.exec(lines[i].split('//')[0]);
+          if (!mc) continue;
+          const mapV = mc[1];
+          const win = lines.slice(i, Math.min(lines.length, i + 7)).join('\n');
+          if (win.includes(`${mapV}.put(`) && /submit|execute|new\s+Thread|parallelStream|Runnable/.test(code)) {
+            diags.push({ line: i + 1, severity: 'ERROR', category: 'SEMANTIC', ruleId: 'CONC-004', title: `CheckThenActRace on Shared Map '${mapV}'`, message: `Cause: Non-atomic '${mapV}.containsKey/get' followed by '${mapV}.put' in concurrent code. Runtime Consequence: Race condition overwrites entries or corrupts HashMap!`, suggestion: `Use ConcurrentHashMap with ${mapV}.computeIfAbsent(...).` });
+          }
+        }
 
         const methodComplexity = [];
         const mhRe = /^\s*(?:(?:public|private|protected|static|final)\s+)+[A-Za-z0-9_<>,\[\]\s]+\s+([A-Za-z_]\w*)\s*\([^)]*\)/;
@@ -817,15 +951,25 @@ public class CleanBankAccount {
         document.getElementById('stat-warnings').textContent = warns;
         document.getElementById('stat-complexity').textContent = m.complexity || 1;
         document.getElementById('health-grade-badge').textContent = `${m.healthScore || 0} / 100 (${m.healthGrade || 'A'})`;
+        const scoreVal = m.healthScore || 0;
         const bar = document.getElementById('health-bar-fill');
-        bar.style.width = `${m.healthScore || 0}%`;
-        bar.className = `h-full transition-all duration-300 ${m.healthScore >= 85 ? 'bg-emerald-500' : m.healthScore >= 60 ? 'bg-amber-400' : 'bg-rose-500'}`;
+        bar.style.width = `${scoreVal}%`;
+        bar.className = `h-full transition-all duration-300 ${scoreVal >= 85 ? 'bg-emerald-500' : scoreVal >= 60 ? 'bg-amber-400' : 'bg-rose-500'}`;
+        const ring = document.getElementById('health-ring-fill');
+        const ringText = document.getElementById('health-ring-text');
+        if (ring && ringText) {
+          ring.style.strokeDashoffset = String(125.66 * (1 - scoreVal / 100));
+          ring.style.stroke = scoreVal >= 85 ? '#10b981' : scoreVal >= 60 ? '#f59e0b' : '#f43f5e';
+          ringText.textContent = String(scoreVal);
+        }
 
-        const panel = document.getElementById('panel-diagnostics');
-        if (diags.length === 0) {
-          panel.innerHTML = `<div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold text-center">Zero errors or warnings found—tap "Run &amp; See Output" to execute live.</div>`;
+        const activeFilter = window._javalensSevFilter || 'ALL';
+        const filteredDiags = activeFilter === 'ALL' ? diags : diags.filter((d) => d.severity === activeFilter);
+        const panel = document.getElementById('diag-list');
+        if (filteredDiags.length === 0) {
+          panel.innerHTML = `<div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold text-center">${diags.length === 0 ? 'Zero errors or warnings found—tap "Run &amp; See Output" to execute live.' : 'No issues match this filter.'}</div>`;
         } else {
-          panel.innerHTML = diags.map((d) => {
+          panel.innerHTML = filteredDiags.map((d) => {
             const cls = d.severity === 'ERROR'
               ? 'border-rose-200 bg-rose-50/70'
               : d.severity === 'WARNING'
@@ -973,7 +1117,21 @@ public class CleanBankAccount {
       function switchTab(name) {
         document.querySelectorAll('.tab-view').forEach((v) => v.classList.add('hidden'));
         document.getElementById('panel-' + name).classList.remove('hidden');
-        document.querySelectorAll('.tab-btn').forEach((b) => {
+        window._javalensSevFilter = 'ALL';
+      document.querySelectorAll('.sev-pill').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          window._javalensSevFilter = btn.dataset.sevFilter;
+          document.querySelectorAll('.sev-pill').forEach((b) => {
+            const on = b.dataset.sevFilter === window._javalensSevFilter;
+            b.className = on
+              ? 'sev-pill px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold transition'
+              : 'sev-pill px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-[11px] font-bold transition';
+          });
+          if (lastReportData) renderAnalysis(lastReportData);
+        });
+      });
+
+      document.querySelectorAll('.tab-btn').forEach((b) => {
           const active = b.dataset.tab === name;
           b.className = active
             ? 'tab-btn py-2.5 px-2 text-emerald-700 border-b-2 border-emerald-600 bg-white'

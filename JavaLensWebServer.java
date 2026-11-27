@@ -9,7 +9,7 @@ import java.util.*;
 /**
  * JavaLens Pro - Built-in Pure Java HTTP Web Server (Standard JDK com.sun.net.httpserver)
  * Serves index.html and routes all Analyze, Auto-Fix, Big-O Complexity, Security, Concurrency,
- * and Live Run requests directly to the 15-class Pure Java OOP Engine.
+ * Deep Bug Analysis, and Live Run requests directly to the 16-class Pure Java OOP Engine.
  */
 public class JavaLensWebServer {
 
@@ -17,6 +17,7 @@ public class JavaLensWebServer {
     private final StaticAnalyzer staticAnalyzer = new StaticAnalyzer();
     private final SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer();
     private final ConcurrencyAnalyzer concurrencyAnalyzer = new ConcurrencyAnalyzer();
+    private final DeepBugAnalyzer deepBugAnalyzer = new DeepBugAnalyzer();
     private final ComplexityAnalyzer complexityAnalyzer = new ComplexityAnalyzer();
     private final SecurityScanner securityScanner = new SecurityScanner();
     private final AutoFixer autoFixer = new AutoFixer();
@@ -33,7 +34,7 @@ public class JavaLensWebServer {
                 ex.close();
                 return;
             }
-            sendJson(ex, 200, "{\"status\":\"ok\",\"engine\":\"JavaLens Pro Pure Java JDK 17 (15 OOP Classes)\"}");
+            sendJson(ex, 200, "{\"status\":\"ok\",\"engine\":\"JavaLens Pro Pure Java JDK 17 (16 OOP Classes)\"}");
         });
         server.createContext("/api/analyze", this::handleAnalyze);
         server.createContext("/api/autofix", this::handleAutoFix);
@@ -42,7 +43,7 @@ public class JavaLensWebServer {
         server.setExecutor(null);
         server.start();
         System.out.println("============================================================");
-        System.out.println("  JavaLens Pro - 15-Class Pure Java Backend Server Running!");
+        System.out.println("  JavaLens Pro - 16-Class Pure Java Backend Server Running!");
         System.out.println("  Listening on port: " + port);
         System.out.println("============================================================");
     }
@@ -86,6 +87,7 @@ public class JavaLensWebServer {
         all.addAll(staticAnalyzer.analyze(code));
         all.addAll(semanticAnalyzer.analyze(code));
         all.addAll(concurrencyAnalyzer.analyze(code));
+        all.addAll(deepBugAnalyzer.analyze(code));
         all.addAll(securityScanner.scan(code));
         all.addAll(complexityAnalyzer.toDiagnostics(methodReports));
         all.sort(Comparator.comparingInt(DiagnosticItem::getLine));

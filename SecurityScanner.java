@@ -4,10 +4,10 @@ import java.util.regex.Pattern;
 
 /**
  * JavaLens Pro - Security & Resource-Leak Scanner (Pure Java OOP)
- * Scans Java source code for production security flaws and resource leaks:
+ * Scans Java source code for production security flaws and AutoCloseable resource leaks:
  *  - SEC-001: SQL Injection via String concatenation
  *  - SEC-002: Hardcoded secrets, passwords, or API keys
- *  - SEC-003: Unclosed I/O resource leak (Scanner/FileReader/BufferedReader)
+ *  - SEC-003: Unclosed AutoCloseable Resource Leak (FileInputStream, Scanner, BufferedReader, Socket, Connection, etc.)
  *  - SEC-004: Weak randomness (Math.random / java.util.Random) in security context
  */
 public class SecurityScanner {
@@ -19,7 +19,7 @@ public class SecurityScanner {
             "\\bString\\s+[A-Za-z0-9_]*(?:password|passwd|secret|apiKey|api_key|token|authKey)[A-Za-z0-9_]*\\s*=\\s*\"[^\"]{3,}\"",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern RESOURCE_ALLOC = Pattern.compile(
-            "\\b(Scanner|FileReader|FileWriter|BufferedReader|BufferedWriter|FileInputStream|FileOutputStream)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*new\\s+");
+            "\\b(Scanner|FileReader|FileWriter|BufferedReader|BufferedWriter|FileInputStream|FileOutputStream|InputStream|OutputStream|PrintWriter|Socket|ServerSocket|Connection|PreparedStatement|ResultSet|RandomAccessFile)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*new\\s+");
     private static final Pattern WEAK_RANDOM_CTX = Pattern.compile(
             "\\b(?:otp|token|secret|password|key|pin)[A-Za-z0-9_]*\\b.*(?:Math\\.random|new\\s+Random\\s*\\()",
             Pattern.CASE_INSENSITIVE);
@@ -44,7 +44,7 @@ public class SecurityScanner {
                         DiagnosticItem.Category.SECURITY,
                         "SEC-001",
                         "SQL Injection Vulnerability",
-                        "Building SQL queries with '+' string concatenation allows attackers to inject malicious SQL.",
+                        "Cause: Building SQL queries with '+' string concatenation. Runtime Consequence: Attackers can inject arbitrary SQL statements to steal or delete database records.",
                         "Use PreparedStatement with '?' placeholders and ps.setString(1, value)."
                 ));
             }
@@ -58,12 +58,12 @@ public class SecurityScanner {
                         DiagnosticItem.Category.SECURITY,
                         "SEC-002",
                         "Hardcoded Secret or Credential",
-                        "Storing passwords, tokens, or API keys directly in Java source code risks exposing them in Git repositories.",
+                        "Cause: Password, token, or API key literal stored directly in Java source code. Runtime Consequence: Credentials leak if source code is pushed to Git or shared.",
                         "Load secrets at runtime using System.getenv(\"API_KEY\") instead of hardcoding."
                 ));
             }
 
-            // SEC-003: Unclosed I/O resource leak
+            // SEC-003: Unclosed AutoCloseable Resource Leak
             Matcher mres = RESOURCE_ALLOC.matcher(code);
             if (mres.find()) {
                 String resType = mres.group(1);
@@ -73,12 +73,12 @@ public class SecurityScanner {
                 if (!inTryWithResources && !hasClose) {
                     findings.add(new DiagnosticItem(
                             lineNum, mres.start() + 1,
-                            DiagnosticItem.Severity.WARNING,
+                            DiagnosticItem.Severity.ERROR,
                             DiagnosticItem.Category.SECURITY,
                             "SEC-003",
-                            "Unclosed Resource Leak (" + resType + ")",
-                            "Resource '" + varName + "' (" + resType + ") is opened without calling " + varName + ".close() or using try-with-resources.",
-                            "Wrap in try (" + resType + " " + varName + " = new ...) { ... } so Java closes it automatically."
+                            "ResourceLeak: Unclosed " + resType + " ('" + varName + "')",
+                            "Cause: AutoCloseable resource '" + varName + "' (" + resType + ") is opened without calling " + varName + ".close() or try-with-resources. Runtime Consequence: Leaks OS file descriptors/handles on every call until the JVM crashes with 'Too many open files'!",
+                            "Use try-with-resources: try (" + resType + " " + varName + " = new " + resType + "(...)) { ... }"
                     ));
                 }
             }
@@ -92,7 +92,7 @@ public class SecurityScanner {
                         DiagnosticItem.Category.SECURITY,
                         "SEC-004",
                         "Insecure Random Generator for Security Value",
-                        "Math.random() and java.util.Random are predictable and unsafe for OTPs, passwords, or security tokens.",
+                        "Cause: Using Math.random() or java.util.Random for a security token/OTP. Runtime Consequence: Outputs are predictable from seed state and can be guessed by attackers.",
                         "Use java.security.SecureRandom instead."
                 ));
             }
